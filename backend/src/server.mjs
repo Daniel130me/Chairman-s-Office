@@ -1,0 +1,11 @@
+import 'dotenv/config';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createDatabase} from './db.mjs';
+import {createApp,createScheduler} from './app.mjs';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../');
+const db=createDatabase();
+const app=createApp(db,{staticDir:path.join(root,'frontend','dist')});
+createScheduler(db);
+const port=Number(process.env.PORT||3002);
+app.listen(port,'0.0.0.0',()=>console.log(`Chairman's Office backend listening at http://localhost:${port}`));
