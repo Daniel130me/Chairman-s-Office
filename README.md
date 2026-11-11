@@ -1,171 +1,55 @@
-# Chairman's Office v0.5 — The Living Executive World
+# Chairman's Office — Experience-first Neon/Render PWA rebuild
 
-A **local-first, multi-account, immersive fictional executive environment**. Each signed-in user establishes a different holding company and enters a connected executive smartphone with real interactions: management messages, incoming invitations, internet voice calls, an independent professional network, boardroom deliberation, financial overviews, tenders and documents. Company matters advance while the local backend stays running.
+An immersive fictional executive smartphone experience. React/Vite frontend and Express backend run together on a **single Render Free Web Service**, with state persisted in **Neon PostgreSQL**. The user creates a fictional group, meets a chief of staff, develops distinct relationships with internal executives and external stakeholders, responds to incoming call invitations, conducts board discussions, and records strategic decisions. The interface is an original Samsung One UI–inspired phone experience without Samsung branding or proprietary assets.
 
-This is working **source code** intended for local testing, not a deployed hosted service or a native Android/iOS app. The corporate world is fiction; no real-world asset, balance, staff member, appointment or contract is created.
+**Development status:** This is a substantial replacement implementation, not a reviewed production release. Code has been statically checked; network-dependent npm install, React production build, Neon integration, Vapi audio and device push tests require a connected development environment and real credentials. The user must review and test before putting it into public service. Existing v0.5 code remains on GitHub; this package does not silently overwrite it.
 
-## What's inside
+## Structure
 
-```
-chairmans-office-v0.5/
-├── backend/                    Node.js 22 + Express API
-│   ├── .env.example
-│   ├── src/
-│   │   ├── app.mjs            Authenticated API
-│   │   ├── db.mjs             SQLite schema, data access
-│   │   ├── security.mjs       Scrypt passwords + HTTP-only sessions
-│   │   ├── world.mjs          Characters, worlds, meetings, calls, bidding
-│   │   ├── scheduler.mjs      Autonomous updates and call invitations
-│   │   ├── ai.mjs             Five-provider inference gateway and fallback
-│   │   └── server.mjs         Express server
-│   └── test/
-├── frontend/                   Separate React 18 + Vite PWA
-│   ├── .env.example
-│   ├── src/
-│   │   ├── App.jsx            Executive device + interconnected applications
-│   │   ├── api.js             Authenticated HTTP API client
-│   │   └── style.css          Mobile-first premium UI styling
-│   └── public/                 PWA manifest + service worker
-├── VAPI_VOICE_SETUP.md
-├── TEST_SCENARIOS.md
-└── API_REFERENCE.md
-```
+- `frontend/`: React 18, Vite 6, mobile PWA shell, onboarding, notification shade, lock screen, home apps, sound synthesizer, Vapi Web SDK, PWA service worker
+- `backend/`: Express REST API, `pg`/Neon schema, session authentication, user-isolated fictional world, multiple AI providers, character dialogue, meetings, negotiations, call log, Web Push, autonomic scheduler
+- `render.yaml`: one Render Free web service that compiles the frontend and serves it from Express
 
-**Requires:** Node.js **22.13+** (tested with Node 22.16), npm, modern Chrome / Safari / Edge and an internet connection for real AI or Vapi calls. This release deliberately uses the built-in Node `node:sqlite` `DatabaseSync`, which may print an experimental warning on Node 22. You don't need to install SQLite separately.
+## Local setup (Node.js 22+)
 
-## Quick local start in VS Code
+1. Create a Neon PostgreSQL database and copy its **pooled** connection URL.
+2. `cp backend/.env.example backend/.env` and set `DATABASE_URL`. Keep that file private; never commit it.
+3. `cp frontend/.env.example frontend/.env` and set `VITE_VAPI_PUBLIC_KEY` and `VITE_VAPI_ASSISTANT_ID` for real internet calls. These are client-side public credentials; **never expose private Vapi/API tokens** through `VITE_` variables.
+4. In terminal A: `cd backend && npm install && npm run dev`
+5. In terminal B: `cd frontend && npm install && npm run dev`
+6. Open `http://localhost:5173`. Register an account (10+ character password). The PostgreSQL schema is created automatically at backend startup.
+7. To test the production combined-service layout, run `cd frontend && npm run build`, then restart backend and visit `http://localhost:3002`.
 
-### Terminal 1 — backend
+**Important:** The backend must access Neon; frontend is always same-origin `/api`, with Vite's development proxy in development and Express serving built frontend in production. Do not configure cross-site cookies unnecessarily.
 
-```bash
-cd chairmans-office-v0.5/backend
-npm install
-cp .env.example .env
-npm run dev
-```
+## Deploy to Render Free
 
-The server uses `http://localhost:3002` by default (port 3000 and 3001 are often occupied on local machines, so the app now targets a free port). It automatically creates the SQLite database in `backend/data/chairmans-office.sqlite`.
+1. Push **this source** into your existing GitHub repository on a new branch after reviewing it; keep your existing implementation as a backup.
+2. Connect the repository to Render and use the included `render.yaml` blueprint, or create a Node Web Service with root directory at repository root.
+3. Build: `npm ci --prefix backend && npm ci --prefix frontend && npm run build --prefix frontend`
+4. Start: `npm start --prefix backend`
+5. Set environment variables in Render: `DATABASE_URL`, `NODE_ENV=production`, `VITE_VAPI_PUBLIC_KEY`, `VITE_VAPI_ASSISTANT_ID`, server-side AI keys, and optional `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Values beginning `VITE_` are embedded at **build time**; redeploy after changing them.
+6. Open `/api/health` on your assigned Render HTTPS URL; verify `ok: true`.
+7. Register, complete onboarding, verify the 20-second initial call invitation, test each app, then install the PWA via Android Chrome or iPhone Safari **Add to Home Screen**.
+8. Add the Render HTTPS origin to your Vapi allowed origins. Grant microphone access when testing a call.
+9. Create Web Push VAPID keys through a trusted Web Push utility (e.g., `npx web-push generate-vapid-keys`) and add them to Render before enabling in-app alerts.
+10. Optionally configure uptime monitoring to GET `/api/health` every ~10 minutes; this is **not** guaranteed to keep Render Free running. Render can still suspend or restart free services. Neon persists data across Render restarts; the scheduler catches up with missed opportunities when it runs again, but cannot deliver a phone call while the process is offline.
 
-### Terminal 2 — frontend
+**Free-tier caveats:** Render Free is not reliable 24/7 infrastructure. The scheduler uses periodic polling, not durable hosted job execution. The service's filesystem is disposable, which is why application data is held in Neon. PWA push is a notification that opens the app, not native cellular VoIP ringing when the app is closed. A server uptime monitor cannot guarantee deliverability or avoid free-plan limits. For a commercial launch use an always-on service and production job runner, database monitoring, backups, metering, and a security review.
 
-```bash
-cd chairmans-office-v0.5/frontend
-npm install
-cp .env.example .env
-```
+## Realism / experience
 
-Edit `frontend/.env` using the **Vapi Public API Key** and **Assistant ID** that worked in your earlier local demo:
+Distinct contacts have different agendas and relationships; messages and board dialogue call AI models where credentials are available, with deterministic fallback if a provider is unavailable. Full voice sessions require the Vapi public key and a compatible assistant. A locally generated melodic ringtone plays during an in-app call invitation where the browser allows audio; it uses no third-party copyrighted music. The PWA supplies an original lock screen, home screen, app drawer, quick shade and dedicated apps. Events, messages, discussions, bids and decisions persist in Neon. The user can install the experience, but offline access to logged-in data is intentionally limited (no insecure database snapshots in the service-worker cache).
 
-```env
-VITE_VAPI_PUBLIC_KEY=your_existing_public_key
-VITE_VAPI_ASSISTANT_ID=your_existing_vapi_assistant_id
-```
+## Known gaps before a public launch
 
-Run:
+- The original v0.5 repository contains additional scenario detail and workflow edge cases not all replicated in this rewrite. Compare both versions before replacing production code.
+- The meeting interface uses sequential AI turns and device speech is not yet orchestrated into simultaneous multi-person voice conversation.
+- Advanced phone gestures and accessibility audit need physical-device testing.
+- Database migrations currently use idempotent `CREATE TABLE` statements at startup; adopt versioned SQL migration tooling before evolving schema in production.
+- The scheduler runs only while Render is up and has no distributed lease; keep **one server instance** until a durable job queue is implemented.
+- Important production hardening includes user-level quotas, durable audit logs, multi-factor auth, session cleanup, per-character structured long-term memory, AI cost metering, robust request validation and stronger security testing.
 
-```bash
-npm run dev
-```
+## Safety
 
-Open **http://localhost:5173** and register a new account. Passwords must be at least ten characters.
-
-No Twilio or Render is required. The API and SQLite run locally. The external AI gateways and Vapi still require internet access and incur usage-based charges if used.
-
-### Configure the AI providers (optional, highly recommended)
-
-Edit `backend/.env` and set as many provider keys as desired:
-
-```env
-AI_ORDER=groq,gemini,zai,openrouter,openai
-GROQ_API_KEY=
-GEMINI_API_KEY=
-ZAI_API_KEY=
-OPENROUTER_API_KEY=
-OPENAI_API_KEY=
-```
-
-No keys? The world, meetings, messages, scheduled invitations, negotiations and decisions **still function** using the built-in rule-based fallback. However, dialogue is more repetitive. To assess conversational and narrative realism, configure one or more model keys. The backend skips unconfigured providers, times out slow providers, and falls back on errors / invalid JSON. Keys never belong in the React `.env` file.
-
-Provider models and URLs are adjustable in `backend/.env` / `backend/src/ai.mjs` because model availability changes.
-
-### Voice personalization: crucial for realism
-
-**Read `VAPI_VOICE_SETUP.md` before testing calls to people other than Amara.**
-
-The existing Amara assistant may have a hard-coded Amara persona. For this multi-character app, update its Vapi dashboard System Prompt to use `{{character_name}}`, `{{character_title}}`, `{{character_company}}`, `{{chairman_name}}`, and `{{executive_context}}`.
-
-For **different voice identities**, open each person's Contact screen → **Voice identity** and configure a dedicated Vapi Assistant ID (best), or a compatible ElevenLabs Voice ID. Without a separate identity, the app will use the default Vapi assistant voice for all characters, even if their text/personality differs. It will not pretend separate voices were produced.
-
-### Tests
-
-```bash
-cd backend
-npm test
-```
-
-The tests cover independent accounts, custom industries, company developments, decisions, tender governance, real-world / simulated state separation, persistent multi-speaker meeting turns, invitations and AI fallbacks.
-
-## How the autonomous world functions
-
-1. A new account creates its own holding company, industries, subsidiaries and chief of staff.
-2. SQLite seeds company financial assumptions, management executives, independent investors/friends/rivals/bidders, active strategic matters, board engagements, messages, tenders, and management documents.
-3. The backend periodically advances current storylines (45 minutes between world ticks by default), sometimes producing a new external message, and can enrich developments with a configured AI provider.
-4. The scheduler autonomously creates morning and evening briefing invitations and occasional urgent / professional-network calls, subject to daily caps and quiet hours.
-5. Web Push can deliver invitations to supported installed PWAs. In an open browser, the app also polls the backend and displays an incoming-call screen. Tap **Answer** to connect to an actual Vapi Web SDK voice session.
-6. Completed voice transcripts are stored in the current user's SQLite world. Explicit directives can become recorded decisions and later influence events. For high-stakes board instructions, also use the visible decision ledger to confirm accuracy.
-7. Online boardroom supports interactive AI discussion turns with distinct character roles and optional device text-to-speech plus microphone dictation where supported. The board meeting can be concluded to produce recorded minutes and a document.
-8. External contacts have independent business interests; they can reach out via calls and messages. The Chairman can call or message them for advice, collaboration or negotiations.
-
-## Incoming push notifications on Android/iPhone
-
-Browser voice calling works on your laptop immediately after configuring Vapi. **Background phone notifications require HTTPS**, a continuously running backend, and Web Push credentials.
-
-Generate VAPID keys:
-
-```bash
-cd backend
-npm run vapid
-```
-
-Copy both values into `backend/.env` as `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`, and set `VAPID_SUBJECT=mailto:you@example.com`. Restart the backend.
-
-Build the frontend so Express can serve both UI and API from **the same origin**:
-
-```bash
-cd ../frontend
-npm run build
-```
-
-Restart the backend if needed. Local combined app: `http://127.0.0.1:3002`.
-
-To open on phones without Render, run a temporary HTTPS tunnel from another terminal:
-
-```bash
-cloudflared tunnel --url http://127.0.0.1:3002
-```
-
-Open the generated HTTPS URL on Android Chrome and iOS Safari. On iPhone, use **Share → Add to Home Screen** and open the installed Home Screen web app. In Chairman's Office → Settings, tap **Enable incoming alerts**. Approve the notification request. A new user receives an automatic initial briefing invitation shortly after their empire is created; **the user does not need to schedule it**. Later, external contacts can call too.
-
-If the generated tunnel URL changes, add its new HTTPS origin to your Vapi public-key allowed origins. Cloudflare quick tunnels are temporary development endpoints, not durable infrastructure. Keep your laptop awake and connected.
-
-### Important calling constraints
-
-- **Browser/PWA:** scheduled Web Push + in-app invitation, followed by a real two-way Vapi internet conversation. It does **not** reliably show a native WhatsApp-style full-screen ringing interface when closed.
-- **Native phone calls:** not included in this source; require a React Native/Capacitor native call integration and platform-specific push/telecom permissions, or a telephone provider for calls to a normal Nigerian mobile number.
-- **Multi-speaker meeting:** interactive role-based turns with speech synthesis and optional dictation. **Not** a simultaneous multi-user video-conferencing SDK with separately generated audiovisual streams.
-- **Real AI provider failover:** applies to generated text/narratives/meeting turns/extraction. Vapi outages are not automatically covered.
-- **Infrastructure:** SQLite and the worker are on the laptop. When the computer sleeps or shuts down, autonomous advancement and notification delivery stop. Next time the engine is running, it resumes from stored timestamps with bounded catch-up.
-- **Privacy:** external voice and LLM providers may process supplied conversations and context. Recording is requested off for Vapi web calls, but consult your provider retention settings. Never use real banking credentials, real contracts or private third-party data in your fictional world.
-
-## Private/local implementation notes
-
-- Each endpoint authenticates via a random HTTP-only session cookie; passwords are salted and hashed with scrypt.
-- Every mutable/read world operation checks the signed-in user. Attempts to access another user's calls, contacts or meetings fail.
-- The frontend and backend have independent `package.json` files and communicate only via HTTP `/api` routes. Vite proxies `/api` to Express during development.
-- The gateway is server-side and supports OpenAI-compatible calls (Groq, Z.ai, OpenRouter, OpenAI) plus Gemini `generateContent`.
-- `ENABLE_DEV_CONTROLS=true` enables Settings → **Advance simulation activity**, useful for rapidly evaluating different industries and accounts. Set `false` in any shared deployment.
-- This isn't a production-hardened multi-tenant SaaS. Add robust monitoring, backups, migration handling, provider metering, request quotas, per-account notification delivery policies, audit tooling, email confirmation and security review before a public launch.
-
-## Current testing status
-
-The core backend logic and SQLite tests run locally in the build environment. Frontend JSX was syntax-checked with the TypeScript parser, and backend `.mjs` files passed Node syntax checks. The build environment could not access npm's registry, so **`npm install`, Vite production build, Express integration and a real Vapi call have not been verified here**. See `TEST_SCENARIOS.md` for how to verify those on your machine.
+This is an immersive **fictional simulation**. It must never falsely indicate that real contracts, company actions, wealth or regulatory activity happened outside the application. Keep all actual provider private keys server-side. Never commit `.env` files.

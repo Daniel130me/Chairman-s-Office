@@ -1,50 +1,32 @@
-import { DatabaseSync } from 'node:sqlite';
-import fs from 'node:fs';
-import path from 'node:path';
+import pg from 'pg';
 import crypto from 'node:crypto';
-
-const now = () => new Date().toISOString();
-export { now };
-export const id = () => crypto.randomUUID();
-export const decode = (s, otherwise = null) => { try { return JSON.parse(s); } catch { return otherwise; } };
-
-export function createDatabase(file = process.env.DB_PATH || './data/chairmans-office.sqlite') {
-  if (file !== ':memory:') fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
-  const db = new DatabaseSync(file);
-  db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
-    CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, pass_hash TEXT NOT NULL, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS worlds (id TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE, name TEXT NOT NULL, region TEXT NOT NULL, timezone TEXT NOT NULL, sectors TEXT NOT NULL, chief TEXT NOT NULL, valuation INTEGER NOT NULL, last_tick TEXT NOT NULL, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS companies (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, name TEXT NOT NULL, sector TEXT NOT NULL, valuation INTEGER NOT NULL, cash INTEGER NOT NULL, revenue INTEGER NOT NULL, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS contacts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL, company TEXT NOT NULL, kind TEXT NOT NULL, relationship TEXT NOT NULL, temperament TEXT NOT NULL, agenda TEXT NOT NULL, trust INTEGER NOT NULL DEFAULT 60, availability TEXT NOT NULL DEFAULT 'available', voice_id TEXT, vapi_assistant_id TEXT, last_contact_at TEXT, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, company_id TEXT, contact_id TEXT, title TEXT NOT NULL, category TEXT NOT NULL, summary TEXT NOT NULL, stage INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'open', priority TEXT NOT NULL DEFAULT 'normal', next_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, thread_id TEXT, contact_id TEXT, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, contact_id TEXT NOT NULL, direction TEXT NOT NULL, channel TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS meetings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, thread_id TEXT, title TEXT NOT NULL, start_at TEXT NOT NULL, duration_minutes INTEGER NOT NULL, attendees TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'scheduled', minutes TEXT, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS meeting_turns (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, meeting_id TEXT NOT NULL, contact_id TEXT, speaker TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, thread_id TEXT, contact_id TEXT, title TEXT NOT NULL, kind TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS tenders (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, company_id TEXT, thread_id TEXT, title TEXT NOT NULL, budget INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS bids (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, tender_id TEXT NOT NULL, contact_id TEXT NOT NULL, amount INTEGER NOT NULL, weeks INTEGER NOT NULL, quality INTEGER NOT NULL, risk TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'submitted');
-    CREATE TABLE IF NOT EXISTS decisions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, thread_id TEXT, contact_id TEXT, content TEXT NOT NULL, source TEXT NOT NULL, outcome TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS invites (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, contact_id TEXT NOT NULL, thread_id TEXT, kind TEXT NOT NULL, subject TEXT NOT NULL, preview TEXT NOT NULL, due_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS calls (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, world_id TEXT NOT NULL, contact_id TEXT NOT NULL, invite_id TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, transcript TEXT NOT NULL DEFAULT '[]', summary TEXT);
-    CREATE TABLE IF NOT EXISTS push_subscriptions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, endpoint TEXT NOT NULL, subscription TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(user_id,endpoint));
-    CREATE TABLE IF NOT EXISTS settings (user_id TEXT PRIMARY KEY, morning TEXT NOT NULL DEFAULT '07:30', evening TEXT NOT NULL DEFAULT '19:00', quiet_start TEXT NOT NULL DEFAULT '21:00', quiet_end TEXT NOT NULL DEFAULT '07:00', max_daily INTEGER NOT NULL DEFAULT 3, urgent INTEGER NOT NULL DEFAULT 1, notifications INTEGER NOT NULL DEFAULT 1);
-    CREATE TABLE IF NOT EXISTS audit (id TEXT PRIMARY KEY,user_id TEXT NOT NULL,action TEXT NOT NULL,details TEXT,created_at TEXT NOT NULL);
-    CREATE INDEX IF NOT EXISTS idx_contacts_user ON contacts(user_id);
-    CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id,created_at);
-    CREATE INDEX IF NOT EXISTS idx_invites_due ON invites(due_at,status);
-    CREATE INDEX IF NOT EXISTS idx_messages_contact ON messages(user_id,contact_id,created_at);
-    CREATE INDEX IF NOT EXISTS idx_threads_user ON threads(user_id,status);
-  `);
-  return db;
-}
-export function run(db, sql, ...params) { return db.prepare(sql).run(...params); }
-export function all(db, sql, ...params) { return db.prepare(sql).all(...params); }
-export function get(db, sql, ...params) { return db.prepare(sql).get(...params); }
-export function insert(db, table, object) {
-  const keys = Object.keys(object);
-  const q = `INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`;
-  return run(db, q, ...keys.map(k=>object[k]));
-}
-export function audit(db,userId,action,details={}) { insert(db,'audit',{id:id(),user_id:userId,action,details:JSON.stringify(details),created_at:now()}); }
+const {Pool}=pg;
+let pool;
+export function database(){if(!pool){if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL missing: add your Neon connection string');pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:true},max:5,idleTimeoutMillis:20000,connectionTimeoutMillis:12000});}return pool;}
+export async function sql(text,params=[]){return (await database().query(text,params)).rows;}
+export async function one(text,params=[]){return (await sql(text,params))[0]||null;}
+export async function transaction(fn){const client=await database().connect();try{await client.query('BEGIN');const q=async(t,p=[])=> (await client.query(t,p)).rows;const result=await fn(q);await client.query('COMMIT');return result;}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}}
+export const uid=()=>crypto.randomUUID();
+export const iso=()=>new Date().toISOString();
+export async function init(){await sql(`CREATE TABLE IF NOT EXISTS users(id uuid PRIMARY KEY,name text NOT NULL,email text NOT NULL UNIQUE,pass_hash text NOT NULL,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS sessions(token_hash text PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,expires_at timestamptz NOT NULL);
+CREATE TABLE IF NOT EXISTS worlds(id uuid PRIMARY KEY,user_id uuid UNIQUE REFERENCES users(id) ON DELETE CASCADE,name text NOT NULL,region text NOT NULL,timezone text NOT NULL,sectors jsonb NOT NULL,chief text NOT NULL,style text NOT NULL DEFAULT 'balanced',valuation numeric NOT NULL DEFAULT 0,last_tick timestamptz NOT NULL DEFAULT now(),created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS companies(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,name text,sector text,valuation numeric,cash numeric,revenue numeric,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS contacts(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,name text,title text,company text,kind text,relationship text,temperament text,agenda text,trust integer DEFAULT 60,respect integer DEFAULT 55,tension integer DEFAULT 10,availability text DEFAULT 'available',voice_id text,vapi_assistant_id text,last_contact_at timestamptz,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS threads(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,company_id uuid,contact_id uuid,title text,category text,summary text,stage integer DEFAULT 0,status text DEFAULT 'open',priority text DEFAULT 'normal',next_at timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS events(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,thread_id uuid,contact_id uuid,kind text,title text,body text,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS messages(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,contact_id uuid NOT NULL,direction text,channel text DEFAULT 'chat',body text,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS meetings(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,thread_id uuid,title text,start_at timestamptz,duration_minutes integer DEFAULT 45,attendees jsonb DEFAULT '[]',status text DEFAULT 'scheduled',minutes text,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS meeting_turns(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,meeting_id uuid REFERENCES meetings(id) ON DELETE CASCADE,contact_id uuid,speaker text,message text,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS documents(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,thread_id uuid,contact_id uuid,title text,kind text,body text,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS decisions(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,thread_id uuid,content text,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS invites(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,contact_id uuid,thread_id uuid,kind text,subject text,preview text,due_at timestamptz,status text DEFAULT 'pending',created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS calls(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,contact_id uuid,invite_id uuid,started_at timestamptz DEFAULT now(),ended_at timestamptz,transcript jsonb DEFAULT '[]',summary text,status text DEFAULT 'active');
+CREATE TABLE IF NOT EXISTS tenders(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,world_id uuid REFERENCES worlds(id) ON DELETE CASCADE,title text,budget numeric,status text DEFAULT 'open',created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS bids(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,tender_id uuid REFERENCES tenders(id) ON DELETE CASCADE,contact_id uuid,amount numeric,weeks integer,quality integer,risk text,status text DEFAULT 'submitted',created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS settings(user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,morning text DEFAULT '08:00',evening text DEFAULT '18:00',quiet_start text DEFAULT '22:00',quiet_end text DEFAULT '07:00',max_daily integer DEFAULT 4,urgent boolean DEFAULT true,ringtone text DEFAULT 'signature',theme text DEFAULT 'dark');
+CREATE TABLE IF NOT EXISTS push_subscriptions(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,endpoint text UNIQUE,subscription jsonb,created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS scheduler_jobs(id uuid PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,kind text,payload jsonb DEFAULT '{}',due_at timestamptz,done_at timestamptz,UNIQUE(user_id,kind,due_at));
+CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id,contact_id,created_at);
+CREATE INDEX IF NOT EXISTS idx_invites_due ON invites(user_id,status,due_at);
+CREATE INDEX IF NOT EXISTS idx_jobs_due ON scheduler_jobs(due_at) WHERE done_at IS NULL;`);}

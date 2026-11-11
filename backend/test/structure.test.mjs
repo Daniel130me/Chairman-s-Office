@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';
+const root=path.resolve(import.meta.dirname,'../../');
+test('Neon schema covers executive-world persistence and push',()=>{const db=fs.readFileSync(path.join(root,'backend/src/db.mjs'),'utf8');for(const table of ['users','sessions','worlds','companies','contacts','threads','events','messages','meetings','meeting_turns','documents','decisions','invites','calls','tenders','bids','settings','push_subscriptions'])assert.match(db,new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`));assert.match(db,/pg/);});
+test('all voice and notification credentials remain placeholders',()=>{const example=fs.readFileSync(path.join(root,'backend/.env.example'),'utf8');assert.match(example,/DATABASE_URL=/);assert.match(example,/VAPID_PRIVATE_KEY=/);assert.match(example,/GROQ_API_KEY=/);});
+test('Render config uses one combined service and health endpoint',()=>{const y=fs.readFileSync(path.join(root,'render.yaml'),'utf8');assert.match(y,/plan: free/);assert.match(y,/startCommand: npm start --prefix backend/);assert.match(y,/healthCheckPath: \/api\/health/);});
