@@ -26,7 +26,7 @@ An immersive fictional executive smartphone experience. React/Vite frontend and 
 
 1. Push **this source** into your existing GitHub repository on a new branch after reviewing it; keep your existing implementation as a backup.
 2. Connect the repository to Render and use the included `render.yaml` blueprint, or create a Node Web Service with root directory at repository root.
-3. Build: `npm ci --prefix backend && npm ci --prefix frontend && npm run build --prefix frontend`
+3. Build: `npm ci --prefix backend --omit=dev && npm ci --prefix frontend --include=dev && npm run build --prefix frontend`
 4. Start: `npm start --prefix backend`
 5. Set environment variables in Render: `DATABASE_URL`, `NODE_ENV=production`, `VITE_VAPI_PUBLIC_KEY`, `VITE_VAPI_ASSISTANT_ID`, server-side AI keys, and optional `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Values beginning `VITE_` are embedded at **build time**; redeploy after changing them.
 6. Open `/api/health` on your assigned Render HTTPS URL; verify `ok: true`.
