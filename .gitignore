@@ -6,3 +6,10 @@ frontend/dist/
 .DS_Store
 *.sqlite
 *.sqlite-*
+
+.next/
+.vercel/
+.workflow/
+.env.local
+.env.*.local
+node_modules/
