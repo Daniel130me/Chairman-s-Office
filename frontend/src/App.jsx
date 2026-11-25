@@ -14,7 +14,7 @@ function AppHeader({title,back,action,subtitle}){return <div className="app-head
 function Primary({children,onClick,disabled=false,secondary=false}){return <button className={'primary-btn '+(secondary?'secondary':'')} disabled={disabled} onClick={onClick}>{children}</button>}
 function App({}){
 const [user,setUser]=useState(null),[world,setWorld]=useState(null),[loading,setLoading]=useState(true),[page,setPage]=useState('home'),[stack,setStack]=useState([]),[locked,setLocked]=useState(false),[shade,setShade]=useState(false),[drawer,setDrawer]=useState(false),[detail,setDetail]=useState(null),[toast,setToast]=useState(''),[clock,setClock]=useState(new Date()),[incoming,setIncoming]=useState(null),[ringing,setRinging]=useState(false),[call,setCall]=useState(null),[transcript,setTranscript]=useState([]),[muted,setMuted]=useState(false),[speaker,setSpeaker]=useState(true);
-const vapiRef=useRef(null),transcriptRef=useRef([]),callRef=useRef(null),lastInvite=useRef(null),toastTimer=useRef(null);const notify=s=>{setToast(s);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(''),4500)};
+const vapiRef=useRef(null),transcriptRef=useRef([]),callRef=useRef(null),dialingRef=useRef(false),finishingRef=useRef(false),lastInvite=useRef(null),toastTimer=useRef(null);const notify=s=>{setToast(s);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(''),4500)};
 const reload=async()=>{const r=await api('/state');setUser(r.user);setWorld(r.state);return r.state;};
 useEffect(()=>{if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});},[]);
 useEffect(()=>{let mounted=true;api('/me').then(r=>{if(mounted)setUser(r.user);return reload()}).catch(()=>{}).finally(()=>mounted&&setLoading(false));const timer=setInterval(()=>setClock(new Date()),1000);return()=>{mounted=false;clearInterval(timer);stopRing()};},[]);
@@ -29,15 +29,57 @@ function back(){setStack(s=>{const n=[...s],last=n.pop();if(last){setPage(last.p
 function home(){setPage('home');setStack([]);setDetail(null);setDrawer(false);setShade(false);}
 async function logout(){try{
   const registration=await navigator.serviceWorker?.getRegistration();const sub=await registration?.pushManager?.getSubscription();
-  if(sub){await api('/push/unsubscribe',{method:'POST',body:{endpoint:sub.endpoint}});await sub.unsubscribe();}
+  if(sub){await sub.unsubscribe();await api('/push/unsubscribe',{method:'POST',body:{endpoint:sub.endpoint}}).catch(()=>{});}
   const result=await authClient.signOut();if(result.error)throw Error(result.error.message);
-  stopRing();vapiRef.current?.stop();setCall(null);setIncoming(null);transcriptRef.current=[];setTranscript([]);lastInvite.current=null;setUser(null);setWorld(null);home();
+  stopRing();vapiRef.current?.stop();callRef.current=null;setCall(null);setIncoming(null);transcriptRef.current=[];setTranscript([]);lastInvite.current=null;setUser(null);setWorld(null);home();
 }catch(e){notify(e.message||'Unable to sign out');}}
 async function decline(){stopRing();setRinging(false);if(incoming)await api(`/invites/${incoming.id}/decline`,{method:'POST',body:{}}).catch(()=>{});setIncoming(null);reload().catch(()=>{});}
-async function answer(){stopRing();setRinging(false);const c=world.contacts.find(x=>x.id===incoming?.contact_id);if(!c)return;try{const data=await api('/calls/start',{method:'POST',body:{contactId:c.id,inviteId:incoming?.id}});setCall({...data,contact:c,live:false});callRef.current=data.call.id;transcriptRef.current=[];setTranscript([]);setIncoming(null);await startVapi(data,c);}catch(e){notify(e.message);setIncoming(null)}}
-async function dial(c){try{const data=await api('/calls/start',{method:'POST',body:{contactId:c.id}});setCall({...data,contact:c,live:false});callRef.current=data.call.id;transcriptRef.current=[];setTranscript([]);await startVapi(data,c);}catch(e){notify(e.message)}}
-async function startVapi(data,c){const key=process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY,assistant=data.assistantId||process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID;if(!key||!assistant){notify('Voice credentials not set. Add NEXT_PUBLIC_VAPI_PUBLIC_KEY and NEXT_PUBLIC_VAPI_ASSISTANT_ID for live conversation.');return;}try{const v=new Vapi(key);vapiRef.current=v;v.on('call-start',()=>setCall(t=>t?{...t,live:true}:t));v.on('message',m=>{if(m.type==='transcript'&&m.transcriptType==='final'){transcriptRef.current=[...transcriptRef.current,{role:m.role||'speaker',text:m.transcript}];setTranscript(transcriptRef.current);}});v.on('error',e=>notify('Voice connection error. Please check Vapi configuration.'));v.on('call-end',()=>{setCall(t=>t?{...t,live:false}:t)});await v.start(assistant,{variableValues:{character_name:c.name,character_title:c.title,character_company:c.company,chairman_name:user?.name||'Chairman',executive_context:data.context},firstMessage:`Good day, Chairman. ${c.name} speaking.`});}catch(e){notify('Unable to establish voice connection: '+e.message)}}
-async function hangup(){try{vapiRef.current?.stop();if(callRef.current)await api(`/calls/${callRef.current}/end`,{method:'POST',body:{transcript:transcriptRef.current}})}catch(e){notify(e.message)}vapiRef.current=null;callRef.current=null;setCall(null);transcriptRef.current=[];setTranscript([]);reload().catch(()=>{})}
+// A second tap cannot start another connection while the first is connecting.
+async function connect(c,inviteId){
+  if(!c||dialingRef.current||callRef.current)return;
+  dialingRef.current=true;
+  stopRing();setRinging(false);
+  try{
+    const data=await api('/calls/start',{method:'POST',body:{contactId:c.id,inviteId}});
+    callRef.current=data.call.id;transcriptRef.current=[];setTranscript([]);
+    setCall({...data,contact:c,live:false});setIncoming(null);
+    await startVapi(data,c);
+  }catch(e){notify(e.message);setIncoming(null);reload().catch(()=>{});}
+  finally{dialingRef.current=false;}
+}
+async function answer(){await connect(world.contacts.find(x=>x.id===incoming?.contact_id),incoming?.id);}
+async function dial(c){await connect(c,null);}
+async function startVapi(data,c){
+  const key=process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY;
+  const assistant=data.assistantId||process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID;
+  if(!key||!assistant){notify('Voice credentials not set. Configure Vapi to make live calls.');await finishVoice(false,'failed');return;}
+  try{
+    const v=new Vapi(key);vapiRef.current=v;
+    v.on('call-start',()=>setCall(t=>t?{...t,live:true}:t));
+    v.on('message',m=>{
+      if(m.type==='transcript'&&m.transcriptType==='final'){
+        transcriptRef.current=[...transcriptRef.current,{role:m.role||'speaker',text:m.transcript}];
+        setTranscript(transcriptRef.current);
+      }
+    });
+    v.on('error',()=>{notify('Voice connection error. Check Vapi and microphone access.');void finishVoice(true,'failed');});
+    v.on('call-end',()=>{void finishVoice(false,'completed');});
+    await v.start(assistant,{variableValues:{character_name:c.name,character_title:c.title,character_company:c.company,chairman_name:user?.name||'Chairman',executive_context:data.context},firstMessage:'Good day, Chairman. '+c.name+' speaking.'});
+  }catch(e){notify('Unable to establish voice connection: '+e.message);await finishVoice(true,'failed');}
+}
+// Keep the transcript in memory until Neon confirms it was saved. Hang up again to retry.
+async function finishVoice(stop,status='completed'){
+  if(finishingRef.current||!callRef.current)return;
+  finishingRef.current=true;setCall(t=>t?{...t,live:false}:t);
+  try{
+    if(stop){try{vapiRef.current?.stop();}catch{}}
+    vapiRef.current=null;
+    await api('/calls/'+callRef.current+'/end',{method:'POST',body:{transcript:transcriptRef.current,status}});
+    callRef.current=null;setCall(null);transcriptRef.current=[];setTranscript([]);reload().catch(()=>{});
+  }catch(e){notify('Call ended. Tap hang up again to retry saving the transcript.');}
+  finally{finishingRef.current=false;}
+}
+async function hangup(){await finishVoice(true);}
 const currentContact=contact=>world?.contacts?.find(c=>c.id===contact);
 const pending=world?.invites?.filter(x=>x.status==='pending'&&new Date(x.due_at)<=new Date())||[];
 const hour=clock.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',hour12:false});
