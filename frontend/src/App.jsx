@@ -120,10 +120,99 @@ return <div className={'phone-environment '+(world.settings?.theme==='light'?'li
 {toast&&<div className="toast">{toast}</div>}
 </div></div>;
 }
-function Auth({onAuth,notify}){const[notice,setNotice]=useState('');const[mode,setMode]=useState('login'),[values,setValues]=useState({name:'',email:'',password:''}),[busy,setBusy]=useState(false);async function submit(e){e.preventDefault();setBusy(true);try{const result=mode==='login'?await authClient.signIn.email({email:values.email,password:values.password}):await authClient.signUp.email({name:values.name,email:values.email,password:values.password,callbackURL:window.location.origin});
-if(result.error)throw Error(result.error.message);
-if(mode==='register'&&!result.data?.user?.emailVerified){setMode('login');setNotice('Check your email to verify your account, then sign in.');return;}
-await onAuth();}catch(e){setNotice(e.message||'Unable to sign in');notify(e.message)}finally{setBusy(false)}}return <div className="access"><div className="access-card"><div className="brand-seal">CO</div><div className="access-pretitle">PRIVATE EXECUTIVE ACCESS</div><h1>{mode==='login'?'Welcome back, Chairman.':'Your empire begins here.'}</h1><p>Step inside a world of decisions, relationships, influence and extraordinary responsibility.</p>{notice&&<p role="status" className="auth-notice">{notice}</p>}<form onSubmit={submit}>{mode==='register'&&<label>Full name<input required placeholder="How should we address you?" value={values.name} onChange={e=>setValues({...values,name:e.target.value})}/></label>}<label>Executive email<input type="email" required placeholder="you@example.com" value={values.email} onChange={e=>setValues({...values,email:e.target.value})}/></label><label>Password<input type="password" required minLength={10} placeholder="Minimum 10 characters" value={values.password} onChange={e=>setValues({...values,password:e.target.value})}/></label><Primary disabled={busy}>{busy?'Securing your access…':mode==='login'?'Enter your office':'Create executive account'}</Primary></form><button className="switch-auth" onClick={()=>setMode(mode==='login'?'register':'login')}>{mode==='login'?'New to the office? Establish your account':'Already have an account? Sign in'}</button><small><button type="button" className="switch-auth" onClick={async()=>{if(!values.email){setNotice('Enter your email first.');return;}try{const r=await authClient.requestPasswordReset({email:values.email,redirectTo:window.location.origin+'/reset-password'});if(r.error)throw Error(r.error.message);setNotice('If the account exists, reset instructions have been sent.');}catch(e){setNotice(e.message)}}}>Forgot password?</button><button type="button" className="switch-auth" onClick={async()=>{if(!values.email){setNotice('Enter your email first.');return;}try{const r=await authClient.sendVerificationEmail({email:values.email,callbackURL:window.location.origin});if(r.error)throw Error(r.error.message);setNotice('Check your email for a verification link.');}catch(e){setNotice(e.message)}}}>Resend verification email</button>All people, institutions and financial events in this experience are fictional.</small></div></div>}
+function Auth({onAuth,notify}){
+  const[notice,setNotice]=useState('');
+  const[mode,setMode]=useState('login');
+  const[values,setValues]=useState({name:'',email:'',password:''});
+  const[otp,setOtp]=useState('');
+  const[busy,setBusy]=useState(false);
+  const email=values.email.trim().toLowerCase();
+
+  async function submit(e){
+    e.preventDefault();
+    setBusy(true);
+    try{
+      if(mode==='login'){
+        const result=await authClient.signIn.email({email,password:values.password});
+        if(result.error)throw Error(result.error.message);
+        await onAuth();
+        return;
+      }
+      if(mode==='register'){
+        const result=await authClient.signUp.email({name:values.name.trim(),email,password:values.password});
+        if(result.error)throw Error(result.error.message);
+        if(result.data?.user?.emailVerified){await onAuth();return;}
+        setMode('verify');
+        setNotice('A six-digit verification code has been sent to your email. Enter it below to secure your executive access.');
+        return;
+      }
+      if(mode==='verify'){
+        const result=await authClient.emailOtp.verifyEmail({email,otp:otp.trim()});
+        if(result.error)throw Error(result.error.message);
+        const login=await authClient.signIn.email({email,password:values.password});
+        if(login.error)throw Error(login.error.message);
+        await onAuth();
+        return;
+      }
+      if(mode==='forgot'){
+        const result=await authClient.forgetPassword.emailOtp({email});
+        if(result.error)throw Error(result.error.message);
+        setMode('reset');
+        setNotice('A password reset code has been sent if this email belongs to an account.');
+        return;
+      }
+      if(mode==='reset'){
+        const result=await authClient.emailOtp.resetPassword({email,otp:otp.trim(),password:values.password});
+        if(result.error)throw Error(result.error.message);
+        setMode('login');
+        setOtp('');
+        setValues(v=>({...v,password:''}));
+        setNotice('Your password has been reset. You can now sign in.');
+      }
+    }catch(e){
+      setNotice(e.message||'Unable to complete this request.');
+      notify(e.message||'Unable to complete this request.');
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  async function resendCode(){
+    if(!email){setNotice('Enter your email address first.');return;}
+    setBusy(true);
+    try{
+      const result=mode==='reset'
+        ?await authClient.forgetPassword.emailOtp({email})
+        :await authClient.emailOtp.sendVerificationOtp({email,type:'email-verification'});
+      if(result.error)throw Error(result.error.message);
+      setNotice('A new code has been sent. Check your inbox.');
+    }catch(e){setNotice(e.message||'Unable to send a new code.');}
+    finally{setBusy(false);}
+  }
+
+  const heading={login:'Welcome back, Chairman.',register:'Your empire begins here.',verify:'Verify your executive access.',forgot:'Recover your access.',reset:'Choose a new password.'}[mode];
+  const button={login:'Enter your office',register:'Create executive account',verify:'Verify email and continue',forgot:'Send reset code',reset:'Reset password'}[mode];
+
+  return <div className="access"><div className="access-card">
+    <div className="brand-seal">CO</div>
+    <div className="access-pretitle">PRIVATE EXECUTIVE ACCESS</div>
+    <h1>{heading}</h1>
+    <p>Step inside a world of decisions, relationships, influence and extraordinary responsibility.</p>
+    {notice&&<p role="status" className="auth-notice">{notice}</p>}
+    <form onSubmit={submit}>
+      {mode==='register'&&<label>Full name<input required placeholder="How should we address you?" value={values.name} onChange={e=>setValues({...values,name:e.target.value})}/></label>}
+      <label>Executive email<input type="email" required placeholder="you@example.com" disabled={mode==='verify'||mode==='reset'} value={values.email} onChange={e=>setValues({...values,email:e.target.value})}/></label>
+      {['login','register','reset','verify'].includes(mode)&&<label>{mode==='reset'?'New password':'Password'}<input type="password" required minLength={10} placeholder="Minimum 10 characters" value={values.password} onChange={e=>setValues({...values,password:e.target.value})}/></label>}
+      {(mode==='verify'||mode==='reset')&&<label>Six-digit email code<input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" value={otp} onChange={e=>setOtp(e.target.value.replace(/\\D/g,'').slice(0,6))}/></label>}
+      <Primary disabled={busy}>{busy?'Please wait…':button}</Primary>
+    </form>
+    {mode==='login'&&<><button className="switch-auth" onClick={()=>{setMode('register');setNotice('')}}>New to the office? Establish your account</button><button className="switch-auth" onClick={()=>{setMode('forgot');setNotice('')}}>Forgot password?</button></>}
+    {mode==='register'&&<button className="switch-auth" onClick={()=>{setMode('login');setNotice('')}}>Already have an account? Sign in</button>}
+    {(mode==='verify'||mode==='reset')&&<><button type="button" className="switch-auth" disabled={busy} onClick={resendCode}>Resend code</button><button type="button" className="switch-auth" onClick={()=>{setMode('login');setOtp('');setNotice('')}}>Return to sign in</button></>}
+    {mode==='forgot'&&<button type="button" className="switch-auth" onClick={()=>{setMode('login');setNotice('')}}>Return to sign in</button>}
+    <small>All people, institutions and financial events in this experience are fictional.</small>
+  </div></div>;
+}
 function Onboarding({user,onDone,notify}){const[step,setStep]=useState(0),[busy,setBusy]=useState(false),[info,setInfo]=useState({name:'Aurelius Holdings',region:'Lagos, Nigeria',timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'Africa/Lagos',sectors:['Technology','Finance','Infrastructure'],chief:'Amara Okafor',style:'balanced'});const sectors=['Technology','Banking & Finance','Infrastructure','Energy','Real Estate','Aviation','Manufacturing','Media','Healthcare','Logistics','Hospitality','Agriculture'];const steps=['Your new life','Build your empire','Leadership style','Meet your chief of staff'];async function finish(){setBusy(true);try{await api('/world',{method:'POST',body:info});await onDone()}catch(e){notify(e.message)}finally{setBusy(false)}}return <div className="onboarding"><div className="onboard-inner"><div className="onboard-brand"><span>CO</span><p>CHAIRMAN'S OFFICE</p></div><div className="onboard-progress">{steps.map((s,i)=><span key={s} className={i<=step?'selected':''}/>)}</div>{step===0?<div className="onboard-step"><div className="onboard-eyebrow">A PRIVATE INVITATION</div><h1>Good evening,<br/><em>Chairman {user.name.split(' ')[0]}.</em></h1><p>Beyond these doors is an entire business world: companies to lead, people to trust, rivals to challenge and decisions whose consequences will follow you.</p><div className="onboard-image"><div className="onboard-orb"/><span>THE OFFICE IS READY</span></div></div>:step===1?<div className="onboard-step"><div className="onboard-eyebrow">ESTABLISH YOUR LEGACY</div><h1>Every empire<br/>has a beginning.</h1><label>Holding company<input value={info.name} onChange={e=>setInfo({...info,name:e.target.value})}/></label><label>Headquarters<input value={info.region} onChange={e=>setInfo({...info,region:e.target.value})}/></label><label>Time zone<input value={info.timezone} onChange={e=>setInfo({...info,timezone:e.target.value})}/></label><span className="field-title">Your industries</span><div className="chips">{sectors.map(s=><button key={s} className={info.sectors.includes(s)?'selected':''} onClick={()=>setInfo(x=>({...x,sectors:x.sectors.includes(s)?x.sectors.filter(k=>k!==s):x.sectors.length<6?[...x.sectors,s]:x.sectors}))}>{s}</button>)}</div></div>:step===2?<div className="onboard-step"><div className="onboard-eyebrow">YOUR PHILOSOPHY</div><h1>What kind of<br/>Chairman are you?</h1><div className="style-options">{[['balanced','The disciplined strategist','Measured growth, financial control and long-term influence.'],['aggressive','The ambitious dealmaker','High-stakes expansion, fierce competition and faster decisions.'],['legacy','The legacy builder','Stewardship, reputation, governance and generational impact.'],['disruptive','The visionary','Technology, change, breakthrough ideas and bold disruption.']].map(x=><button key={x[0]} className={info.style===x[0]?'chosen':''} onClick={()=>setInfo({...info,style:x[0]})}><b>{x[1]}</b><small>{x[2]}</small></button>)}</div></div>:<div className="onboard-step"><div className="onboard-eyebrow">YOUR PRIVATE OFFICE</div><h1>Someone is<br/>waiting for you.</h1><div className="chief-intro"><Avatar name={info.chief} size={86}/><h2>{info.chief}</h2><p>Chief of Staff</p><blockquote>“Chairman, your schedule is prepared. Your executive team has been briefed, and several matters require your attention. I'll be your first point of contact.”</blockquote></div><label>Personalize your chief of staff's name<input value={info.chief} onChange={e=>setInfo({...info,chief:e.target.value})}/></label></div>}<div className="onboard-controls">{step>0&&<button className="back-link" onClick={()=>setStep(step-1)}>Back</button>}<Primary disabled={busy||!info.name.trim()||!info.sectors.length} onClick={()=>step===3?finish():setStep(step+1)}>{busy?'Establishing your world…':step===3?'Enter Chairman’s Office':'Continue'} <ChevronRight size={18}/></Primary></div></div></div>}
 function Calls({state,onBack,openContact,onDial}){const[tab,setTab]=useState('recent');const recent=[...state.calls,...state.invites.filter(i=>i.status==='missed'||i.status==='declined').map(i=>({...i,started_at:i.due_at}))].sort((a,b)=>new Date(b.started_at)-new Date(a.started_at));return <><AppHeader title="Phone" back={onBack} subtitle="Your executive line"/><div className="segments">{['recent','keypad'].map(x=><button className={tab===x?'active':''} onClick={()=>setTab(x)} key={x}>{x==='recent'?'Recents':'Keypad'}</button>)}</div>{tab==='recent'?<div className="list-area">{recent.length?recent.map(x=>{const c=state.contacts.find(c=>c.id===x.contact_id);return <button key={x.id} className="contact-row" onClick={()=>c&&openContact(c)}><Avatar name={c?.name||'Unknown'}/><div className="row-copy"><strong>{c?.name||'Executive'}</strong><small><ArrowUpRight size={12}/>{shortDate(x.started_at)} · {shortTime(x.started_at)} · {x.status}</small></div><button className="circle-action green" onClick={e=>{e.stopPropagation();c&&onDial(c)}}><Phone size={19}/></button></button>}):<Empty title="No recent calls" description="Your call history will appear here. Start with a member of your executive team." icon={Phone}/>}</div>:<div className="list-area">{state.contacts.map(c=><button key={c.id} className="contact-row" onClick={()=>openContact(c)}><Avatar name={c.name}/><div className="row-copy"><strong>{c.name}</strong><small>{c.title}</small></div><Phone size={17}/></button>)}</div>}<div className="app-bottom-link" onClick={()=>state.contacts[0]&&openContact(state.contacts[0])}>Executive contacts <ChevronRight size={18}/></div></>}
 function Contacts({state,onBack,openContact}){const[q,setQ]=useState('');const c=[...state.contacts].sort((a,b)=>a.name.localeCompare(b.name)).filter(c=>[c.name,c.title,c.company].join(' ').toLowerCase().includes(q.toLowerCase()));return <><AppHeader title="Contacts" back={onBack} subtitle={`${state.contacts.length} people in your network`}/><div className="searchbox"><Search size={20}/><input value={q} placeholder="Search contacts" onChange={e=>setQ(e.target.value)}/></div><div className="list-area"><p className="section-label">YOUR NETWORK</p>{c.map(x=><button key={x.id} className="contact-row" onClick={()=>openContact(x)}><Avatar name={x.name}/><div className="row-copy"><strong>{x.name}</strong><small>{x.title} · {x.company}</small></div><ChevronRight size={19} className="quiet-icon"/></button>)}{!c.length&&<Empty title="No contacts found" description="Try another name or company."/>}</div></>}
