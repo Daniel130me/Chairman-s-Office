@@ -203,7 +203,7 @@ function Auth({onAuth,notify}){
       {mode==='register'&&<label>Full name<input required placeholder="How should we address you?" value={values.name} onChange={e=>setValues({...values,name:e.target.value})}/></label>}
       <label>Executive email<input type="email" required placeholder="you@example.com" disabled={mode==='verify'||mode==='reset'} value={values.email} onChange={e=>setValues({...values,email:e.target.value})}/></label>
       {['login','register','reset','verify'].includes(mode)&&<label>{mode==='reset'?'New password':'Password'}<input type="password" required minLength={10} placeholder="Minimum 10 characters" value={values.password} onChange={e=>setValues({...values,password:e.target.value})}/></label>}
-      {(mode==='verify'||mode==='reset')&&<label>Six-digit email code<input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" value={otp} onChange={e=>setOtp(e.target.value.replace(/\\D/g,'').slice(0,6))}/></label>}
+      {(mode==='verify'||mode==='reset')&&<label>Six-digit email code<input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" value={otp} onChange={e=>setOtp(e.target.value.replace(/\D/g,'').slice(0,6))}/></label>}
       <Primary disabled={busy}>{busy?'Please wait…':button}</Primary>
     </form>
     {mode==='login'&&<><button className="switch-auth" onClick={()=>{setMode('register');setNotice('')}}>New to the office? Establish your account</button><button className="switch-auth" onClick={()=>{setMode('forgot');setNotice('')}}>Forgot password?</button></>}
