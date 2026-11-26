@@ -29,3 +29,10 @@ test('event push delivery fields are included in the migration',()=>{
  assert.match(sql,/ALTER TABLE events ADD COLUMN IF NOT EXISTS push_attempt_at/);
  assert.match(sql,/ALTER TABLE events ADD COLUMN IF NOT EXISTS push_attempts/);
 });
+
+test('real-world news and independent refresh throttles are migrated',()=>{
+ assert.match(sql,/CREATE TABLE IF NOT EXISTS real_world_news/);
+ assert.match(sql,/last_real_signal_attempt_at/);
+ assert.match(sql,/last_real_news_at/);
+ assert.match(sql,/last_real_news_attempt_at/);
+});
