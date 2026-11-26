@@ -1,3 +1,5 @@
+"use step";
+
 import pg from 'pg';
 const {Pool}=pg;
 let pool;

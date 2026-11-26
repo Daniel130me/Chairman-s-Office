@@ -68,6 +68,8 @@ test('Node-only database, push and token work is isolated in durable step functi
   assert.match(executiveActions,/^\"use step\";/);
   assert.match(read('lib/vapi-action-token.mjs'),/^\"use step\";/);
   assert.doesNotMatch(read('backend/src/db.mjs'),/node:crypto/);
+  assert.match(read('backend/src/world.mjs'),/^\"use step\";/);
+  assert.match(read('backend/src/db.mjs'),/^\"use step\";/);
   assert.match(worldWorkflow,/import \{runWorldEngineTick\}/);
   assert.match(callWorkflow,/import \{completeScheduledCall\}/);
   assert.match(worldEngine,/export async function runWorldEngineTick[\s\S]*?"use step"/);

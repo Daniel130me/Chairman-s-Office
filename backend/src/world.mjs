@@ -1,3 +1,5 @@
+"use step";
+
 import {sql,one,transaction,uid,iso} from './db.mjs';
 import {ask} from './ai.mjs';
 import {parseCallIntent} from '../../lib/executive-intents.mjs';
