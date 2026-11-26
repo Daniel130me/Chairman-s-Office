@@ -23,3 +23,9 @@ test('schema template contains only complete SQL statements',()=>{
  const statements=sql.split(';').map(s=>s.trim()).filter(Boolean);
  for(const statement of statements)assert.match(statement,/^(CREATE|ALTER|DROP|UPDATE|INSERT|DELETE)\b/i,statement.slice(0,160));
 });
+
+test('event push delivery fields are included in the migration',()=>{
+ assert.match(sql,/ALTER TABLE events ADD COLUMN IF NOT EXISTS push_sent_at/);
+ assert.match(sql,/ALTER TABLE events ADD COLUMN IF NOT EXISTS push_attempt_at/);
+ assert.match(sql,/ALTER TABLE events ADD COLUMN IF NOT EXISTS push_attempts/);
+});
