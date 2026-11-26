@@ -13,7 +13,8 @@ test('voice calls use the saved executive identity and an in-world action tool',
   const world=read('backend/src/world.mjs');
   const tools=read('lib/vapi-tools.mjs');
   assert.match(app,/name:c\.name/);
-  assert.match(app,/messages:\[\{role:'system',content:systemPrompt\}\]/);
+  assert.match(app,/type:'add-message'/);
+  assert.match(app,/\'tools:append\'/);
   assert.match(app,/arrange_internal_call/);
   assert.match(app,/action_token/);
   assert.match(world,/Your name and identity are exactly/);
