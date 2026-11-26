@@ -30,7 +30,15 @@ const scenarios=[['Strategic acquisition opportunity','A privately held competit
 function first(s){return s.split(' ')[0];}
 export async function createWorld(user,data){const name=String(data.name||'Aurelius Holdings').trim().slice(0,95),region=String(data.region||'Lagos, Nigeria').slice(0,100),timezone=String(data.timezone||'Africa/Lagos').slice(0,60),sectors=(Array.isArray(data.sectors)?data.sectors:['Technology','Finance','Infrastructure']).map(x=>String(x).slice(0,55)).slice(0,6),chief=String(data.chief||'Amara Okafor').slice(0,80),style=String(data.style||'balanced').slice(0,35);if(!name||!sectors.length)throw Error('Set a holding company and at least one sector.');try{new Intl.DateTimeFormat('en',{timeZone:timezone});}catch{throw Error('Invalid time zone');}
 return transaction(async q=>{if((await q('SELECT id FROM worlds WHERE user_id=$1',[user.id])).length)throw Error('Your empire is already established.');const wid=uid();const valuation=3500000000;await q('INSERT INTO worlds(id,user_id,name,region,timezone,sectors,chief,style,valuation) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[wid,user.id,name,region,timezone,JSON.stringify(sectors),chief,style,valuation]);await q('INSERT INTO settings(user_id) VALUES($1)',[user.id]);const companies=[];for(let i=0;i<Math.min(4,sectors.length);i++){const cid=uid();const company={id:cid,name:`${name.replace(/\s+(holdings|group|international)$/i,'')} ${sectors[i]} ${i===0?'Limited':'Group'}`,sector:sectors[i],valuation:valuation/(i+2),cash:190000000/(i+1),revenue:390000000/(i+1)};companies.push(company);await q('INSERT INTO companies(id,user_id,world_id,name,sector,valuation,cash,revenue) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[cid,user.id,wid,company.name,company.sector,company.valuation,company.cash,company.revenue]);}
-const contacts=[];for(const [idx,entry] of [...internal,...external].entries()){const isIn=idx<internal.length;const [name0,title,a,b,c,d]=entry;const cname=idx===0?chief:name0;const co=isIn?name:a;const id=uid();contacts.push({id,name:cname,title,company:co});await q('INSERT INTO contacts(id,user_id,world_id,name,title,company,kind,relationship,temperament,agenda,trust) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',[id,user.id,wid,cname,title,co,isIn?'internal':b,isIn?'executive':b,isIn?a:c,isIn?b:d,isIn?75:54]);}
+const contacts=[];for(const [idx,entry] of [...internal,...external].entries()){
+ const isIn=idx<internal.length;const [name0,title,a,b,c,d]=entry;const cname=idx===0?chief:name0;const co=isIn?name:a;const id=uid();
+ const temperament=isIn?a:c,agenda=isIn?b:d,kind=isIn?'internal':b;
+ const expertise=[title,...(isIn?sectors.slice(0,2):[sectors[(idx-internal.length)%sectors.length]])];
+ const personality={communicationStyle:temperament,motivators:agenda,riskPosture:/legal|audit|security|bank/i.test(title)?'cautious':'role-dependent',independentAgency:true};
+ contacts.push({id,name:cname,title,company:co});
+ await q('INSERT INTO contacts(id,user_id,world_id,name,title,company,kind,relationship,temperament,agenda,trust,loyalty,ambition,reputation,expertise,personality_profile) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)',
+ [id,user.id,wid,cname,title,co,kind,isIn?'executive':kind,temperament,agenda,isIn?75:54,isIn?72:38,isIn?55+(idx*7%35):68+((idx-internal.length)*5%25),58,JSON.stringify(expertise),JSON.stringify(personality)]);
+}
 for(let i=0;i<external.length;i++){
  const entry=external[i],contact=contacts[internal.length+i];
  const [personName,personTitle,orgName,kind,temperament,agenda]=entry;
@@ -40,6 +48,23 @@ for(let i=0;i<external.length;i++){
  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(user_id,world_id,name) DO NOTHING`,[orgId,user.id,wid,orgName,sectors[i%sectors.length],orgType,agenda,'established',kind==='rival'||kind==='competitor'?58:55,kind==='rival'||kind==='competitor'?72:25]);
  const org=(await q('SELECT id FROM external_organizations WHERE user_id=$1 AND world_id=$2 AND name=$3',[user.id,wid,orgName]))[0];
  await q('UPDATE contacts SET organization_id=$1 WHERE id=$2 AND user_id=$3',[org.id,contact.id,user.id]);
+}
+// Seed only plausible professional ties. Each direction is a separate private perspective.
+const internalContacts=contacts.slice(0,internal.length);
+for(const from of internalContacts)for(const to of internalContacts)if(from.id!==to.id){
+ await q(`INSERT INTO character_relationships(id,user_id,world_id,from_contact_id,to_contact_id,relationship_label,trust,respect,loyalty,tension,familiarity)
+  VALUES($1,$2,$3,$4,$5,'colleague',50,55,48,10,20) ON CONFLICT(user_id,from_contact_id,to_contact_id) DO NOTHING`,
+  [uid(),user.id,wid,from.id,to.id]);
+}
+const liaisonByKind={investor:'Group CFO',banker:'Group CFO',rival:'Group Strategy Director',competitor:'Group Strategy Director',friend:'Chief of Staff',adviser:'Chief of Staff',client:'Chief Commercial Officer',supplier:'Chief Operating Officer',vendor:'Chief Operating Officer',partner:'Chief Operating Officer',regulator:'General Counsel',journalist:'General Counsel'};
+for(let i=0;i<external.length;i++){
+ const person=contacts[internal.length+i],kind=external[i][3],liaison=internalContacts.find(c=>c.title===liaisonByKind[kind])||internalContacts[0];
+ const label=['rival','competitor'].includes(kind)?'rival':kind==='friend'?'business-friend':'professional-counterparty';
+ for(const [from,to] of [[liaison,person],[person,liaison]]){
+  await q(`INSERT INTO character_relationships(id,user_id,world_id,from_contact_id,to_contact_id,relationship_label,trust,respect,loyalty,tension,familiarity)
+   VALUES($1,$2,$3,$4,$5,$6,45,50,28,15,12) ON CONFLICT(user_id,from_contact_id,to_contact_id) DO NOTHING`,
+   [uid(),user.id,wid,from.id,to.id,label]);
+ }
 }
 for(let i=0;i<scenarios.length;i++){const [title,summary,category,priority]=scenarios[i],id=uid(),actor=contacts[(i+1)%contacts.length];await q('INSERT INTO threads(id,user_id,world_id,company_id,contact_id,title,category,summary,priority) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[id,user.id,wid,companies[i%companies.length].id,actor.id,title,category,summary,priority]);await q('INSERT INTO events(id,user_id,world_id,thread_id,contact_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[uid(),user.id,wid,id,actor.id,'briefing',title,summary]);}
 const greeting=`Good morning, ${user.name}. Your office is established. Your leadership team is waiting, and the first matters are on your desk. I would like to brief you personally before the day begins.`;await q('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,wid,contacts[0].id,'incoming','chat',greeting]);await q('INSERT INTO invites(id,user_id,world_id,contact_id,kind,subject,preview,due_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval \'20 seconds\')',[uid(),user.id,wid,contacts[0].id,'welcome',`Incoming call · ${chief}`,'Your chief of staff would like to welcome you personally.']);await q('INSERT INTO documents(id,user_id,world_id,title,kind,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,wid,'Chairman’s First Executive Brief','briefing',`CONFIDENTIAL — CHAIRMAN’S OFFICE\n\nGroup: ${name}\nHeadquarters: ${region}\nPortfolio: ${sectors.join(', ')}\n\nFirst priorities:\n• Meet the leadership team\n• Review treasury and growth strategy\n• Establish board reporting cadence\n• Evaluate the acquisition proposal`]);const tid=uid();await q('INSERT INTO tenders(id,user_id,world_id,title,budget) VALUES($1,$2,$3,$4,$5)',[tid,user.id,wid,'Regional technology modernization programme',24000000]);for(const [j,c] of contacts.slice(-3).entries())await q('INSERT INTO bids(id,user_id,tender_id,contact_id,amount,weeks,quality,risk) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[uid(),user.id,tid,c.id,22000000+j*1700000,14+j*4,86-j*7,j?'moderate':'low']);return {id:wid,name,region,timezone,sectors,chief,style};});}
