@@ -118,6 +118,7 @@ export function buildActivityFeed(state = {}, user = {}) {
     'board-vote-cast': 'board',
     'board-vote-closed': 'board',
     'board-motion-decided': 'board',
+    'relationship-outcome': 'intelligence',
     'stakeholder-contact': 'messages',
     'supplier-quote': 'inventory',
     'personal-debt-created': 'family',
