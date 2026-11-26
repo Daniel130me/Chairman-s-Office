@@ -127,6 +127,8 @@ export function buildActivityFeed(state = {}, user = {}) {
     'security-review-ready': 'security',
     'security-interview-completed': 'security',
     'security-work-completed': 'security',
+    'security-evidence-corroborated': 'security',
+    'security-evidence-disputed': 'security',
     'stakeholder-contact': 'messages',
     'supplier-quote': 'inventory',
     'personal-debt-created': 'family',
