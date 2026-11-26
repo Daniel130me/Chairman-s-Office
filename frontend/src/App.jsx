@@ -98,7 +98,8 @@ async function startVapi(data,c){
         }
       },
       server:{url:window.location.origin+'/api/vapi/tools'},
-      parameters:[{key:'action_token',value:'{{ actionToken }}'}]
+      parameters:[{key:'action_token',value:'{{ actionToken }}'}],
+      messages:[{type:'request-start',content:'One moment, Chairman. I am arranging that call.',blocking:false}]
     };
     const overrides={
       name:c.name,
