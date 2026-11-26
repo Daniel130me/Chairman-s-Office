@@ -36,3 +36,9 @@ test('real-world news and independent refresh throttles are migrated',()=>{
  assert.match(sql,/last_real_news_at/);
  assert.match(sql,/last_real_news_attempt_at/);
 });
+
+test('asynchronous boardroom rounds have durable status and response tracking',()=>{
+ assert.match(sql,/CREATE TABLE IF NOT EXISTS meeting_rounds/);
+ assert.match(sql,/meeting_rounds_one_active/);
+ assert.match(sql,/responses_saved/);
+});
