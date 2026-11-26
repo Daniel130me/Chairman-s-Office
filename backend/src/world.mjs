@@ -230,7 +230,8 @@ export async function runMeetingRound(roundId,userId){
     const reply=await ask(context+' You are a distinct fictional executive in a private board meeting. Be candid, realistic and evidence-led. Do not invent financial facts or completed actions.',prompt,{fallback:null});
     if(!reply||typeof reply!=='string'||!reply.trim())continue;
     const message=reply.trim().slice(0,1800);
-    await one('INSERT INTO meeting_turns(id,user_id,meeting_id,contact_id,speaker,message) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[uid(),userId,m.id,person.id,person.name,message]);
+    const inserted=await one('INSERT INTO meeting_turns(id,user_id,meeting_id,contact_id,speaker,message,round_id) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(round_id,contact_id) WHERE round_id IS NOT NULL AND contact_id IS NOT NULL DO NOTHING RETURNING id',[uid(),userId,m.id,person.id,person.name,message,roundId]);
+    if(!inserted)continue;
     history.push({speaker:person.name,message});saved++;completed.add(person.id);
     await sql('UPDATE meeting_rounds SET responses_saved=$1 WHERE id=$2 AND user_id=$3',[saved,roundId,userId]);
    }catch(error){console.warn('Board participant response unavailable',person.id,error.name||'error');}
