@@ -31,6 +31,7 @@ export async function state(userId){const world=await one('SELECT * FROM worlds 
 async function characterPrompt(user,contact,history,world){
   const economy=contact.kind==='internal'&&['Group CFO','Chief Operating Officer','Chief of Staff'].includes(contact.title)?await economySnapshot(user.id):null;
   const assigned=await sql("SELECT title,detail,status,outcome FROM business_tasks WHERE user_id=$1 AND assignee_id=$2 ORDER BY created_at DESC LIMIT 10",[user.id,contact.id]);
+  const signals=await sql('SELECT signal_key,label,value,unit,source_name,source_url,observed_at FROM real_world_signals WHERE user_id=$1 ORDER BY observed_at DESC LIMIT 20',[user.id]);
   return [
     'You are '+contact.name+', '+contact.title+' at '+contact.company+' in the Chairman’s Office, an immersive fictional executive world.',
     'The Chairman is '+user.name+', leading '+world.name+' in '+world.region+'.',
@@ -39,6 +40,7 @@ async function characterPrompt(user,contact,history,world){
     'Do not claim real-world external actions occurred. You may complete supported actions inside the Chairman’s Office experience and must rely on their actual tool results before confirming success.',
     'You have your own incentives, knowledge, pride, human flaws and commitments. Temperament: '+contact.temperament+'. Personal agenda: '+contact.agenda+'. Trust: '+contact.trust+'/100; tension: '+contact.tension+'/100.',
     'Authorised company figures (USD, since ledger activation; annual sales assumption is not actual revenue; valuation is an estimate): '+JSON.stringify(economy?.companies||[])+'; your assigned tasks: '+JSON.stringify(assigned)+'. Never claim unrecorded payments or task completion. Do not invent figures; if data is absent say it is unavailable.',
+    'Sourced real-world indicators, including observation dates: '+JSON.stringify(signals)+'. These are external facts, not fictional company transactions; do not claim they changed company finances unless a recorded business action did so.',
     'Recent exchange: '+history.map(m=>m.direction+': '+m.body).join(' | ').slice(-3500)+'.',
     'Speak naturally, distinctly and credibly like a senior professional. You may disagree, ask questions, negotiate or hold back information when consistent with your character. Maintain continuity, specificity and consequences. Reply in plain conversational language, usually 1–4 sentences.'
   ].join(' ');
