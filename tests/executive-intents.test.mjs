@@ -20,6 +20,12 @@ test('keeps the requested colleague when a delegated call has a delay',()=>{
   });
 });
 
+test('allows an explicitly immediate callback',()=>{
+  assert.deepEqual(parseCallIntent('Please call me back right now.'),{
+    recipient:null,delaySeconds:0,kind:'assistant-callback'
+  });
+});
+
 test('asks one clarification when a callback has no time',()=>{
   assert.equal(
     parseCallIntent('Please call me back.').clarification,
