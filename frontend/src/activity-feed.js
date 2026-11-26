@@ -114,8 +114,11 @@ export function buildActivityFeed(state = {}, user = {}) {
     'acquisition-completed': 'acquisitions',
     'acquisition-approved': 'acquisitions',
     'travel-booking-confirmed': 'travel',
-    'purchase-order-approved': 'operations',
-    'purchase-order-paid': 'operations',
+    'purchase-order-drafted': 'inventory',
+    'purchase-order-received': 'inventory',
+    'inventory-sale': 'inventory',
+    'purchase-order-approved': 'inventory',
+    'purchase-order-paid': 'inventory',
     'payroll-paid': 'employees'
   };
 
