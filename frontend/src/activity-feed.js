@@ -110,6 +110,7 @@ export function buildActivityFeed(state = {}, user = {}) {
     'loan-disbursed': 'loans',
     'loan-approved': 'loans',
     'loan-repayment': 'loans',
+    'loan-overdue': 'loans',
     'acquisition-completed': 'acquisitions',
     'acquisition-approved': 'acquisitions',
     'travel-booking-confirmed': 'travel',
@@ -132,7 +133,7 @@ export function buildActivityFeed(state = {}, user = {}) {
       actor,
       person: contactName(event.contact_id),
       participation: event.actor_type === 'chairman' || chairmanName(actor, user) ? 'you' : 'away',
-      requiresAttention: /approval|missed.call|fraud|security|investigation|urgent/i.test(event.kind || '') || ['high', 'critical'].includes(normalise(event.priority)),
+      requiresAttention: /approval|missed.call|fraud|security|investigation|urgent|overdue/i.test(event.kind || '') || ['high', 'critical'].includes(normalise(event.priority)),
       target: eventTargets[event.kind] || targetFor(category),
       threadId: event.thread_id,
       contactId: event.contact_id
