@@ -415,6 +415,8 @@ export function buildActivityFeed(state = {}, user = {}) {
   }
 
   const operations = state.operations || {};
+  for(const o of list(operations.opportunities))add('commercial-opportunity',o,{date:o.updated_at||o.created_at,kind:'commercial-opportunity',category:'business',title:o.proposal?.title||'Customer opportunity',body:[o.proposal?.reason,o.negotiation?.reason,money(o.proposed_value)].filter(Boolean).join(' · '),source:'Deals',company:o.company_name||companyName(o.company_id),status:o.stage,target:'deals'});
+  for(const m of list(operations.milestones))add('commercial-milestone',m,{date:m.updated_at||m.created_at,kind:'commercial-milestone',category:'business',title:'Commercial milestone · '+m.status,body:[money(m.amount),m.payment_decision?.reason].filter(Boolean).join(' · '),source:'Deals',company:companyName(m.company_id),status:m.status,requiresAttention:m.status==='blocked',target:'deals'});
   for (const invoice of list(operations.invoices)) {
     add('invoice-issued', invoice, {
       date: invoice.issued_at,
