@@ -1,6 +1,5 @@
-# Increment 29 — Strategic investments and acquisitions
-- Added acquisition pipeline with draft, approval, completion and cancellation states.
-- Completion posts an investment asset against cash, records ownership and valuation, and creates a subsidiary company for controlling stakes (50%+).
-- Minority stakes remain in the investment portfolio; no fictional subsidiary is created.
-- Added Investments & Acquisitions application and portfolio visibility.
-- Remaining: due diligence workflow, seller negotiation, regulatory conditions, earn-outs, partial ownership consolidation, disposals and impairment accounting.
+# Increment 29 — Weather in the reality-to-world bridge
+- Adds Open-Meteo geocoding and current conditions/precipitation probability for the configured world region, with source URL and observation time.
+- Weather is stored as sourced external signals, not company transactions; characters receive the signal snapshot as external context.
+- Signal refresh cadence is six hours. If every source fails, the refresh timestamp is not advanced, allowing the next engine tick to retry.
+- Weather API availability and relevance for multiple operating regions still need acceptance testing; current implementation uses the world’s primary region.
