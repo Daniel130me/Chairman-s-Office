@@ -1,12 +1,11 @@
 import pg from 'pg';
-import crypto from 'node:crypto';
 const {Pool}=pg;
 let pool;
 export function database(){if(!pool){if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL missing: add your Neon connection string');pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:true},max:5,idleTimeoutMillis:20000,connectionTimeoutMillis:12000});}return pool;}
 export async function sql(text,params=[]){return (await database().query(text,params)).rows;}
 export async function one(text,params=[]){return (await sql(text,params))[0]||null;}
 export async function transaction(fn){const client=await database().connect();try{await client.query('BEGIN');const q=async(t,p=[])=> (await client.query(t,p)).rows;const result=await fn(q);await client.query('COMMIT');return result;}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}}
-export const uid=()=>crypto.randomUUID();
+export const uid=()=>globalThis.crypto.randomUUID();
 export const iso=()=>new Date().toISOString();
 export async function init(){await sql(`CREATE TABLE IF NOT EXISTS users(id uuid PRIMARY KEY,name text NOT NULL,email text NOT NULL UNIQUE,pass_hash text NOT NULL,created_at timestamptz DEFAULT now());
 CREATE TABLE IF NOT EXISTS sessions(token_hash text PRIMARY KEY,user_id uuid REFERENCES users(id) ON DELETE CASCADE,expires_at timestamptz NOT NULL);
