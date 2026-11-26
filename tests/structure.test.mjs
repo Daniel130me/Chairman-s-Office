@@ -64,6 +64,8 @@ test('Node-only database, push and token work is isolated in durable step functi
   const executiveActions=read('lib/executive-actions.mjs');
   const packageJson=JSON.parse(read('package.json'));
   assert.equal(packageJson.dependencies.workflow,'5.8.0');
+  assert.match(worldEngine,/^\"use step\";/);
+  assert.match(executiveActions,/^\"use step\";/);
   assert.match(worldWorkflow,/import \{runWorldEngineTick\}/);
   assert.match(callWorkflow,/import \{completeScheduledCall\}/);
   assert.match(worldEngine,/export async function runWorldEngineTick[\s\S]*?"use step"/);
