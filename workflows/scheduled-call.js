@@ -1,5 +1,5 @@
 import {sleep} from 'workflow';
-import {completeScheduledCall} from '../lib/executive-actions.mjs';
+import {deliverScheduledCall} from './steps/scheduled-call.js';
 
 // Durable callback: Vercel Workflow waits without keeping a server process alive.
 export async function scheduledCall(jobId,delaySeconds){
@@ -12,7 +12,8 @@ export async function scheduledCall(jobId,delaySeconds){
   }
 }
 
+// Keep this step name stable so already-started callbacks can resume.
 async function deliver(jobId){
   "use step";
-  return completeScheduledCall(jobId);
+  return deliverScheduledCall(jobId);
 }

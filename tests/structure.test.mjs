@@ -56,3 +56,18 @@ test('the Activity timeline is connected to the phone and its recorded sources',
   assert.match(app,/View full Activity timeline/);
   for(const source of ['state.events','state.messages','state.calls','state.meetings','state.economy?.journal','state.operations?.auditLog','state.worldConversationMessages'])assert.ok(feed.includes(source),source);
 });
+
+test('workflow entrypoints only orchestrate isolated Node-capable step modules',()=>{
+  const worldWorkflow=read('workflows/world-engine.js');
+  const callWorkflow=read('workflows/scheduled-call.js');
+  const worldStep=read('workflows/steps/world-engine.js');
+  const callStep=read('workflows/steps/scheduled-call.js');
+  assert.doesNotMatch(worldWorkflow,/backend\/src\/db|lib\/world-engine|node:crypto|web-push/);
+  assert.doesNotMatch(callWorkflow,/lib\/executive-actions|node:crypto|web-push/);
+  assert.match(worldWorkflow,/runTick/);
+  assert.match(callWorkflow,/deliver\(/);
+  assert.match(worldStep,/"use step"/);
+  assert.match(worldStep,/tick\(interval\)/);
+  assert.match(callStep,/"use step"/);
+  assert.match(callStep,/completeScheduledCall/);
+});
