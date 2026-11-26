@@ -7,3 +7,27 @@ test('auth does not grant access based on email alone',()=>{const code=read('lib
 test('workflow uses durable sleep instead of process polling',()=>{const code=read('workflows/world-engine.js');assert.match(code,/"use workflow"/);assert.match(code,/"use step"/);assert.match(code,/await sleep/);assert.doesNotMatch(code,/setInterval/);});
 test('service worker limits caching to public Next assets',()=>assert.match(read('public/sw.js'),/\/_next\/static\//));
 test('accepting an invitation checks owner, contact, due time and status',()=>assert.match(read('backend/src/world.mjs'),/contact_id=\$3 AND status='pending' AND due_at<=now\(\)/));
+
+test('voice calls use the saved executive identity and an in-world action tool',()=>{
+  const app=read('frontend/src/App.jsx');
+  const world=read('backend/src/world.mjs');
+  const tools=read('lib/vapi-tools.mjs');
+  assert.match(app,/name:c\.name/);
+  assert.match(app,/messages:\[\{role:'system',content:systemPrompt\}\]/);
+  assert.match(app,/arrange_internal_call/);
+  assert.match(app,/action_token/);
+  assert.match(world,/Your name and identity are exactly/);
+  assert.match(world,/createVapiActionToken/);
+  assert.match(tools,/verifyVapiActionToken/);
+});
+test('delayed callbacks use durable workflows and prompt incoming-call polling',()=>{
+  assert.match(read('workflows/scheduled-call.js'),/await sleep/);
+  assert.match(read('lib/executive-actions.mjs'),/completeScheduledCall/);
+  assert.match(read('lib/world-engine.mjs'),/export async function deliverInvitePush/);
+  assert.match(read('app/api/invites/pending/route.js'),/pendingInvites/);
+  assert.match(read('frontend/src/App.jsx'),/api\('\/invites\/pending'\)/);
+});
+test('scheduled call actions have database-level idempotency protection',()=>{
+  assert.match(read('lib/migrate.mjs'),/scheduler_jobs_action_key_unique/);
+  assert.match(read('lib/executive-actions.mjs'),/ON CONFLICT DO NOTHING/);
+});
