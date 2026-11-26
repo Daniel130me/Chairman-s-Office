@@ -80,6 +80,7 @@ async function startVapi(data,c){
       'BOUNDARIES: Do not claim to make real-world PSTN calls or perform external actions. You can arrange incoming calls between characters inside the Chairman’s Office app. Confirm an action only after the relevant tool returns success.',
       'COLLEAGUES: '+(colleagues||'Use the Chairman’s executive directory to identify colleagues by name or job title.'),
       'DELEGATION: When the Chairman asks you to have an executive call him, ask an executive to call him, or arrange a callback, use arrange_internal_call. Do not merely promise to do it and do not refuse because the world is fictional.',
+      'BUSINESS ACTIONS: If the Chairman asks for a consequential company action such as an expense, hiring, firing, activating a contract or delegating work, collect any missing details and use propose_business_action. This submits an approval request; it does not execute the action. Never say the action is complete until the Chairman approves it and the application confirms execution. Tell the Chairman to review the Approvals app.',
       'TOOL RULES: For another executive, pass their name or job title as recipient. For a callback from yourself, omit recipient. Use delaySeconds=0 for an immediate call or the exact requested delay, such as 30 for 30 seconds. Always include reason as a faithful copy of the Chairman’s request, preserving timing words. Never invent a delay. If the timing is vague, ask one short clarifying question. If the tool reports an error, explain the error honestly.',
       'CALL FLOW: An arranged call appears as an incoming call on the Chairman’s Office phone. If the Chairman is still on a call when the new call becomes due, it waits until the current call ends. Never claim a call is already connected before the Chairman answers.',
       'If the Chairman asks you to call someone else rather than have them call him, clarify which direction he wants. Do not use the incoming-call tool for an outgoing call.'
@@ -117,7 +118,31 @@ async function startVapi(data,c){
         available_colleagues:colleagues,
         actionToken:data.actionToken||''
       },
-      ...(data.actionToken?{'tools:append':[callTool]}:{})
+      ...(data.actionToken?{'tools:append':[callTool,{
+        type:'function',async:false,function:{
+          name:'propose_business_action',
+          description:'Submit a consequential action in the Chairman’s fictional business empire for Chairman approval. Never execute it yourself. Supported action types are expense, hire, fire, activate-contract and assign-task.',
+          parameters:{
+            type:'object',
+            properties:{
+              action_type:{type:'string',enum:['expense','hire','fire','activate-contract','assign-task']},
+              title:{type:'string'},
+              reason:{type:'string'},
+              payload:{type:'object',properties:{
+                companyId:{type:'string'},amount:{type:'string'},description:{type:'string'},
+                name:{type:'string'},title:{type:'string'},salary:{type:'string'},
+                employmentId:{type:'string'},contractId:{type:'string'},
+                assigneeId:{type:'string'},detail:{type:'string'},taskType:{type:'string'}
+              },additionalProperties:false}
+            },
+            required:['action_type','title','reason','payload'],
+            additionalProperties:false
+          }
+        },
+        server:{url:window.location.origin+'/api/vapi/tools'},
+        parameters:[{key:'action_token',value:'{{ actionToken }}'}],
+        messages:[{type:'request-start',content:'I will submit this for the Chairman’s approval.',blocking:false}]
+      }]}:{})
     };
     await v.start(assistant,overrides);
     // Add call-specific identity rules after the WebRTC session is ready.
