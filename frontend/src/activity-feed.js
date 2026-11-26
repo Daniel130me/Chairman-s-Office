@@ -186,6 +186,10 @@ export function buildActivityFeed(state = {}, user = {}) {
     });
   }
 
+  for (const call of list(state.colleagueCalls)) {
+    const caller=contactName(call.caller_id)||'Colleague',recipient=contactName(call.recipient_id)||'Contact';
+    add('colleague-call',call,{date:call.started_at,kind:'colleague-call',category:'communication',title:caller+' called '+recipient,body:call.reason,source:'Colleague calls',actor:caller,person:recipient,status:call.status,participation:'away',target:'messages'});
+  }
   for (const message of list(state.worldConversationMessages)) {
     const sender = message.sender_name || contactName(message.sender_contact_id) || 'Colleague';
     add('group-message', message, {
