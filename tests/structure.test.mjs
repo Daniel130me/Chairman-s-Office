@@ -37,7 +37,7 @@ test('scheduled call actions have database-level idempotency protection',()=>{
 test('direct messages and group conversations keep separate state keys',()=>{
   const communications=read('lib/autonomous-communications.mjs');
   const app=read('frontend/src/App.jsx');
-  assert.match(communications,/return \{worldConversations:conversations,worldConversationMessages\}/);
+  assert.match(communications,/return \{worldConversations:conversations,worldConversationMessages(?:,|\})/);
   assert.match(app,/state\.worldConversations/);
   assert.match(app,/state\.worldConversationMessages/);
 });
