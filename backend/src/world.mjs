@@ -8,7 +8,7 @@ import {employmentSnapshot} from '../../lib/employment.mjs';
 import {operationsSnapshot} from '../../lib/operations.mjs';
 import {communicationSnapshot,sendWorldMessage} from '../../lib/autonomous-communications.mjs';
 import {marketSnapshot} from '../../lib/market-engine.mjs';
-import {actionRequestsSnapshot} from '../../lib/action-requests.mjs';
+import {actionRequestsSnapshot,requestAction} from '../../lib/action-requests.mjs';
 const internal=[['Amara Okafor','Chief of Staff','Measured, perceptive and fiercely discreet','Protect the Chairman’s time and long-term reputation'],['Daniel Mercer','Group CFO','Precise, skeptical and analytically rigorous','Preserve liquidity and challenge weak forecasts'],['Nadia Mensah','Chief Operating Officer','Pragmatic, decisive and direct','Keep subsidiaries performing and execution realistic'],['Julian Hart','General Counsel','Calm, exacting and cautious','Prevent reputational and contractual exposure'],['Sophia Vale','Group Strategy Director','Creative, ambitious and competitive','Pursue defensible expansion opportunities'],['Marcus Reid','Board Chair','Independent and challenging','Ensure accountability and shareholder discipline'],['Grace Okafor','Group Human Resources Director','Empathetic, observant and firm','Build a capable workforce and protect fair employment practices'],['Maya Okoye','Chief Security Officer','Alert, disciplined and discreet','Protect people, information and company assets'],['Rafael Chen','Internal Audit Director','Methodical, independent and evidence-led','Identify control weaknesses and investigate irregularities'],['Tunde Adebayo','Chief Commercial Officer','Persuasive, commercially minded and competitive','Grow customer relationships and improve deal quality']];
 const external=[['Aisha Rahman','Managing Partner','Meridian Capital','investor','Sharp and guarded','Earn favorable terms and obtain influence'],['Victor Sloane','CEO','Sloane Meridian Group','rival','Assertive and calculating','Outcompete the Chairman in key sectors'],['Elena Moretti','Founder','Moretti Ventures','friend','Warm but candid','Find joint ventures without sacrificing independence'],['Kwame Bediako','Regional Director','Atlas Infrastructure','partner','Dependable and cautious','Win strategic delivery contracts'],['Isabelle Laurent','Market Analyst','Independent Advisory','adviser','Thoughtful and sometimes contrarian','Help the Chairman see hidden risks'],['Farah Nasser','Managing Director','Sterling Procurement','vendor','Persuasive and opportunistic','Win competitive bids with profitable terms'],['David Okoro','Chief Executive','Northstar Consumer Group','client','Direct and commercially demanding','Secure reliable supply and favorable service levels'],['Priya Nair','Private Banker','Crown Meridian Bank','banker','Discreet and risk-conscious','Grow lending and wealth-management relationships'],['Ruth Mensah','Commissioner','West African Trade Authority','regulator','Formal and evidence-driven','Ensure compliance and protect public confidence'],['Daniel Brooks','Investigations Editor','The Continental Ledger','journalist','Persistent and skeptical','Publish stories that withstand scrutiny'],['Omar Haddad','Founder and CEO','Helix Industrial Systems','competitor','Ambitious and highly competitive','Win market share and recruit scarce talent'],['Grace Osei','Managing Director','Osei Global Supply','supplier','Practical and price-sensitive','Secure long-term procurement contracts'],['Samuel Dube','Chairman','Dube Ventures','friend','Sociable but strategically cautious','Build trusted business relationships'],['Alex Chen','General Partner','Summit Frontier Partners','investor','Analytical and impatient','Find high-growth investments with governance discipline']];
 const scenarios=[['Strategic acquisition opportunity','A privately held competitor may be available at an attractive valuation. Finance wants diligence before any commitment.','strategy','high'],['Treasury and liquidity outlook','The CFO is reviewing cash reserves against an accelerated expansion plan.','finance','normal'],['Board governance review','The board has requested a clear explanation of execution risks and capital allocation.','board','high'],['New regional partnership','A cross-border partner has proposed commercial collaboration with meaningful upside and operational dependencies.','deal','normal'],['Reputation and stakeholder confidence','External stakeholders are watching how the group responds to shifting market conditions.','risk','normal']];
@@ -46,6 +46,33 @@ async function characterPrompt(user,contact,history,world){
     'Speak naturally, distinctly and credibly like a senior professional. You may disagree, ask questions, negotiate or hold back information when consistent with your character. Maintain continuity, specificity and consequences. Reply in plain conversational language, usually 1–4 sentences.'
   ].join(' ');
 }
+
+async function classifyBusinessAction(user,contact,body,operationKeyValue){
+ if(contact.kind!=='internal'||!/\b(hire|recruit|fire|terminate|dismiss|expense|spend|pay|approve|contract|assign|delegate|investigation|investigate)\b/i.test(body))return null;
+ const [companies,employees,contracts,executives]=await Promise.all([
+  sql('SELECT id,name,sector FROM companies WHERE user_id=$1',[user.id]),
+  sql("SELECT e.id,p.name,e.job_title,e.status FROM employment_records e JOIN contacts p ON p.id=e.contact_id AND p.user_id=e.user_id WHERE e.user_id=$1 AND e.status='active'",[user.id]),
+  sql("SELECT id,title,counterparty,status,value FROM business_contracts WHERE user_id=$1 AND status='draft'",[user.id]),
+  sql("SELECT id,name,title,company FROM contacts WHERE user_id=$1 AND kind='internal'",[user.id])
+ ]);
+ const parsed=await ask(
+  'You are a strict business-action intent parser for a fictional company simulation. Return JSON only: {"actionType":"expense|hire|fire|activate-contract|assign-task|none","title":"","reason":"","payload":{},"clarification":""}. Create an action only when the Chairman clearly instructs the executive to initiate a real action now, not when discussing a hypothetical, asking a question or exploring options. Never invent identifiers, salary, amount, names, companies or terms. Use only supplied IDs. If required details are missing, set actionType to none and ask one concise clarification. Never execute anything; the result is only a request for Chairman approval.',
+  JSON.stringify({chairmanMessage:body,requestingExecutive:{name:contact.name,title:contact.title},companies,activeEmployees:employees,draftContracts:contracts,internalExecutives:executives,allowedPayloads:{
+   expense:{companyId:'existing company id',amount:'positive decimal string',description:'reason'},
+   hire:{companyId:'existing company id',name:'candidate name',title:'role',salary:'annual salary decimal string'},
+   fire:{employmentId:'active employment record id',reason:'documented reason'},
+   'activate-contract':{contractId:'draft contract id',reason:'approval reason'},
+   'assign-task':{companyId:'existing company id or omitted',assigneeId:'internal contact id',title:'task title',detail:'instructions',taskType:'valid task type'}
+  }}),
+  {json:true,fallback:null}
+ );
+ if(!parsed||typeof parsed!=='object')return null;
+ if(typeof parsed.clarification==='string'&&parsed.clarification.trim())return {clarification:parsed.clarification.trim().slice(0,300)};
+ const allowed=['expense','hire','fire','activate-contract','assign-task'];
+ if(!allowed.includes(parsed.actionType))return null;
+ const request=await requestAction(user,contact.id,{actionType:parsed.actionType,title:parsed.title,reason:parsed.reason,payload:parsed.payload||{},operationKey:operationKeyValue});
+ return {request};
+}
 export async function message(user,contactId,body,channel='chat',sourceCallId=null){
   body=String(body||'').trim().slice(0,3500);
   if(!body)throw Error('Write a message.');
@@ -54,7 +81,8 @@ export async function message(user,contactId,body,channel='chat',sourceCallId=nu
   if(!c||!w)throw Error('Contact unavailable');
 
   if(sourceCallId&&!await one("SELECT id FROM calls WHERE id=$1 AND user_id=$2 AND world_id=$3 AND contact_id=$4 AND status='missed'",[sourceCallId,user.id,w.id,c.id]))throw Error('Call unavailable');
-  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,source_call_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[uid(),user.id,w.id,c.id,'outgoing',sourceCallId?'missed-call':channel,body,sourceCallId]);
+  const outgoingId=uid();
+  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,source_call_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[outgoingId,user.id,w.id,c.id,'outgoing',sourceCallId?'missed-call':channel,body,sourceCallId]);
   const history=(await sql('SELECT direction,body FROM messages WHERE user_id=$1 AND contact_id=$2 ORDER BY created_at DESC LIMIT 12',[user.id,c.id])).reverse();
   const intent=parseCallIntent(body);
   let reply;
@@ -87,7 +115,10 @@ export async function message(user,contactId,body,channel='chat',sourceCallId=nu
       reply='I could not arrange that call just now. '+String(error?.message||'Please try again.');
     }
   }else{
-    reply=await ask(
+    const proposed=await classifyBusinessAction(user,c,body,'message:'+outgoingId).catch(error=>{console.warn('Business action classification deferred',error.name||'error');return null;});
+    if(proposed?.clarification)reply=proposed.clarification;
+    else if(proposed?.request)reply='Chairman, I have submitted “'+proposed.request.title+'” to your Approvals app with the supporting reason. Nothing has been executed yet; I will proceed only after your decision.';
+    else reply=await ask(
       (await characterPrompt(user,c,history,w))+' Previous calls: '+(await sql("SELECT summary FROM calls WHERE user_id=$1 AND contact_id=$2 AND status='completed' ORDER BY ended_at DESC LIMIT 3",[user.id,c.id])).map(x=>x.summary).join(' | ').slice(0,3500),
       'The Chairman says: '+body+'\nRespond as '+c.name+'.',
       {fallback:null}
