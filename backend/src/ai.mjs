@@ -31,7 +31,7 @@ async function requestGemini(system,prompt,signal){
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{parts:[{text:prompt}]}]}),signal
   });
-  if(!response.ok)return null;
+  if(!response.ok){console.warn('AI provider HTTP status','gemini',response.status);return null;}
   return (await response.json()).candidates?.[0]?.content?.parts?.[0]?.text||null;
 }
 async function requestCompatible(name,system,prompt,signal){
@@ -44,7 +44,7 @@ async function requestCompatible(name,system,prompt,signal){
     method:'POST',headers:{'Authorization':`Bearer ${process.env[provider.key]}`,'Content-Type':'application/json'},
     body:JSON.stringify(payload),signal
   });
-  if(!response.ok)return null;
+  if(!response.ok){console.warn('AI provider HTTP status',name,response.status);return null;}
   return (await response.json()).choices?.[0]?.message?.content||null;
 }
 export async function ask(system,prompt,{fallback='',json=false}={}){
@@ -59,9 +59,11 @@ export async function ask(system,prompt,{fallback='',json=false}={}){
         :await requestCompatible(name,system,prompt,controller.signal);
       const parsed=parseOutput(value,json);
       if(parsed!==null)return parsed;
+      console.warn('AI provider unusable output',name,json?'json':'text');
     }catch(error){
       console.warn('AI provider fallback',name,error.name||'Error');
     }finally{clearTimeout(timeout);}
   }
+  console.warn('AI providers exhausted',providerOrder().join(','));
   return fallback;
 }
