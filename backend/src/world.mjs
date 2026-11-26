@@ -223,7 +223,7 @@ export async function finishCall(user,id,transcript,status='completed'){
  const summary=await ask('Summarize this fictional executive conversation precisely: decisions, commitments, risks, follow-ups. Do not invent facts.',JSON.stringify(rows),{fallback:rows.map(r=>r.role+': '+r.text).join(' ').slice(0,1500)||'Call completed; no transcript available.'});
  const updated=await one("UPDATE calls SET ended_at=now(),status=$4,transcript=$1,summary=$2 WHERE id=$3 AND user_id=$5 AND status='active' RETURNING summary",[JSON.stringify(rows),summary,id,status==='failed'?'failed':'completed',user.id]);
  const finalSummary=updated?.summary??(await one('SELECT summary FROM calls WHERE id=$1 AND user_id=$2',[id,user.id]))?.summary;
- if(updated)await queueCharacterMemory({userId:user.id,worldId:call.world_id,contactId:call.contact_id,sourceType:'voice-call',sourceId:id,context:{transcript:rows,summary:finalSummary,status}}).catch(error=>console.warn('Call memory queue unavailable',error.code||error.name));
+ if(updated&&rows.length)await queueCharacterMemory({userId:user.id,worldId:call.world_id,contactId:call.contact_id,sourceType:'voice-call',sourceId:id,context:{transcript:rows.slice(-40).map(r=>({role:r.role,text:r.text.slice(0,1200)})),summary:finalSummary,status}}).catch(error=>console.warn('Call memory queue unavailable',error.code||error.name));
  return {summary:finalSummary};
 }
 export async function createMeeting(user,data){
@@ -310,7 +310,7 @@ export async function endMeeting(user,id){
   if(!rows.length)return {minutes:(await q('SELECT minutes FROM meetings WHERE id=$1 AND user_id=$2',[id,user.id]))[0].minutes};
   await q('INSERT INTO documents(id,user_id,world_id,title,kind,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,m.world_id,'Minutes — '+m.title,'board minutes',minutes]);
   const attendeeIds=Array.isArray(m.attendees)?m.attendees:[];
-  for(const contactId of attendeeIds)await enqueueCharacterMemory(q,{userId:user.id,worldId:m.world_id,contactId,sourceType:'board-meeting',sourceId:id,context:{meetingTitle:m.title,minutes,turns}});
+  for(const contactId of attendeeIds)await enqueueCharacterMemory(q,{userId:user.id,worldId:m.world_id,contactId,sourceType:'board-meeting',sourceId:id,context:{meetingTitle:m.title,minutes:String(minutes).slice(0,6000),turns:turns.slice(-80).map(t=>({speaker:t.speaker,message:String(t.message).slice(0,1200)}))}});
   return {minutes};
  });
 }
