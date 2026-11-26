@@ -126,3 +126,19 @@ The following systems were added after the original backlog was committed. "Code
 - Preview database migrations are additive and have been applied incrementally. Production migrations must be backed up, reviewed and approved separately.
 - Passing CI/build is necessary but not sufficient. No feature is complete until its acceptance tests, tenant isolation, error/retry behavior and relevant PWA/device checks pass.
 - Do not mark the overall project complete while any required item in this master backlog remains unchecked.
+
+## 17. Expanded Living World delivery record — 26 November 2026
+
+Implementation present on development branch; acceptance checkboxes above deliberately remain open.
+
+- Stakeholder outreach: persistent independently generated messages/call invitations with relationship-specific context, deferrals, retry and rate/quiet-hour handling.
+- Procurement: multi-line orders, partial receipts/settlements, COGS, reorder proposals, matched fictional supplier quotes, bounded counteroffers and modeled approved delivery. Stocktakes and returns remain.
+- Board: persistent advisory motions, individual AI ballots, quorum, resolutions and browser speech dictation. True simultaneous multi-party Vapi voice and real-device verification remain.
+- Travel: itinerary changes, confirmed-booking cancellation, bounded refunds to original account, expense reversal and modeled calendar completion. Disruption/concierge/security orchestration remains.
+- Wealth: personal debt draws and repayments, liability-adjusted exact net worth, configured monthly asset upkeep and unpaid upkeep obligations.
+- Philanthropy: recipient verification evidence, new-grant approval gating, recurring proposals and user-recorded measured impact. Independent foundation governance and impact verification remain.
+- Relationships: supplier delivery, customer settlement and dispute cause bounded, idempotent trust/respect/tension updates. Broader character knowledge permissions, dynamic introduction and rival financial consequences remain.
+- HR: earlier implementation covers historical employment terms, prorated payroll, candidates, review, promotion approval and modeled notice. Interactive interviews and negotiated offers remain.
+- Loan schedules and accrued interest: earlier implementation covers installments and overdue notices. Refinancing, collateral and covenants remain.
+- Validation: 11 new tables, 20 validated CHECK constraints, refund fixture balanced, 17 direct rule assertions, 15 backend source syntax checks. Regression tests committed; full CI, JSX build, authenticated end-to-end behavior, cross-tenant and multi-device testing still unverified.
+- Blocker: preview build-rate limit. Latest source has not been deployed and the durable workflow revision must be activated on a new validated preview. Production remains untouched. Do not mark complete until all acceptance gates pass.
