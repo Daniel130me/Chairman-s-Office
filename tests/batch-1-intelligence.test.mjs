@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {parseMemoryExtraction,parseAgendaDecision,parseRelationshipReview} from '../lib/character-intelligence.mjs';
 import {parseSecurityScenario,parseSecurityReview,parseInterviewStatement} from '../lib/security-world.mjs';
 
-const allowed={goalIds:['goal-1'],goalProgress:{'goal-1':75},taskIds:['task-1'],contactIds:['contact-1'],companyIds:['company-1']};
+const allowed={goalIds:['goal-1'],goalProgress:{'goal-1':75},taskIds:['task-1'],threadIds:['thread-1'],threadGoals:{'thread-1':'goal-1'},contactIds:['contact-1'],companyIds:['company-1']};
 
 test('character memory preserves epistemic status and sensitivity',()=>{
  const result=parseMemoryExtraction({memories:[{memoryType:'belief',epistemicStatus:'rumor',sensitivity:'confidential',content:'A colleague said the supplier may be changing its terms.',confidence:0.4,importance:3}]});
@@ -20,6 +20,8 @@ test('independent goals require valid targets and recorded evidence for progress
  assert.equal(parseAgendaDecision({decision:'update',goalId:'goal-1',evidenceTaskId:'task-1',progressDelta:15,evidence:'Completed supplier review',rationale:'Recorded task supports progress.'},allowed).decision,'update');
  assert.equal(parseAgendaDecision({decision:'complete',goalId:'goal-1',evidenceTaskId:'task-1',progressDelta:10,evidence:'Completed final task',rationale:'All milestones are evidenced.'},allowed),null);
  assert.equal(parseAgendaDecision({decision:'update',goalId:'goal-1',evidenceTaskId:'unknown',progressDelta:15,evidence:'Claimed completion',rationale:'No source.'},allowed),null);
+ assert.equal(parseAgendaDecision({decision:'update',goalId:'goal-1',evidenceThreadId:'thread-1',progressDelta:10,evidence:'Resolved supplier discussion',rationale:'Conversation was completed.'},allowed).evidenceThreadId,'thread-1');
+ assert.equal(parseAgendaDecision({decision:'update',goalId:'goal-1',evidenceThreadId:'thread-1',progressDelta:10,evidence:'Wrong goal',rationale:'Conversation was completed.'},{...allowed,threadGoals:{'thread-1':'another-goal'}}),null);
 });
 
 test('relationship changes are directional, bounded and never infer familiarity from negative deltas',()=>{
