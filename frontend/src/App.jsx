@@ -80,6 +80,26 @@ async function startVapi(data,c){
       'If the Chairman asks you to call someone else rather than have them call him, clarify which direction he wants. Do not use the incoming-call tool for an outgoing call.'
     ].filter(Boolean).join('\n\n');
 
+    const callTool={
+      type:'function',
+      async:false,
+      function:{
+        name:'arrange_internal_call',
+        description:'Arrange an incoming in-app call from an executive to the Chairman, either immediately or after a requested delay. Use this when the Chairman asks a colleague to call him or asks you to call him back. This does not place a real-world phone call.',
+        parameters:{
+          type:'object',
+          properties:{
+            recipient:{type:'string',description:'The executive’s name or job title. Omit this for a callback from the current speaker.'},
+            delaySeconds:{type:'integer',minimum:0,maximum:86400,description:'0 for an immediate call; otherwise the exact delay in seconds, for example 30 for 30 seconds.'},
+            reason:{type:'string',description:'A short reason for the call, if relevant.'}
+          },
+          required:[],
+          additionalProperties:false
+        }
+      },
+      server:{url:window.location.origin+'/api/vapi/tools'},
+      parameters:[{key:'action_token',value:'{{ actionToken }}'}]
+    };
     const overrides={
       name:c.name,
       firstMessage:'Good day, Chairman. '+c.name+' speaking.',
@@ -92,31 +112,16 @@ async function startVapi(data,c){
         available_colleagues:colleagues,
         actionToken:data.actionToken||''
       },
-      model:{
-        messages:[{role:'system',content:systemPrompt}],
-        ...(data.actionToken?{tools:[{
-          type:'function',
-          async:false,
-          function:{
-            name:'arrange_internal_call',
-            description:'Arrange an incoming in-app call from an executive to the Chairman, either immediately or after a requested delay. Use this when the Chairman asks a colleague to call him or asks you to call him back. This does not place a real-world phone call.',
-            parameters:{
-              type:'object',
-              properties:{
-                recipient:{type:'string',description:'The executive’s name or job title. Omit this for a callback from the current speaker.'},
-                delaySeconds:{type:'integer',minimum:0,maximum:86400,description:'0 for an immediate call; otherwise the exact delay in seconds, for example 30 for 30 seconds.'},
-                reason:{type:'string',description:'A short reason for the call, if relevant.'}
-              },
-              required:[],
-              additionalProperties:false
-            }
-          },
-          server:{url:window.location.origin+'/api/vapi/tools'},
-          parameters:[{key:'action_token',value:'{{ actionToken }}'}]
-        }]}:{})
-      }
+      ...(data.actionToken?{'tools:append':[callTool]}:{})
     };
     await v.start(assistant,overrides);
+    // Add call-specific identity rules after the WebRTC session is ready.
+    // This avoids replacing the saved Vapi model/provider configuration.
+    v.send({
+      type:'add-message',
+      message:{role:'system',content:'IMPORTANT: The following call-specific instructions supersede any conflicting saved assistant identity or prompt. '+systemPrompt},
+      triggerResponseEnabled:false
+    });
   }catch(e){notify('Unable to establish voice connection: '+e.message);await finishVoice(true,'failed');}
 }
 // Keep the transcript in memory until Neon confirms it was saved. Hang up again to retry.
