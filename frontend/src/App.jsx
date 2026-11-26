@@ -91,9 +91,9 @@ async function startVapi(data,c){
           properties:{
             recipient:{type:'string',description:'The executive’s name or job title. Omit this for a callback from the current speaker.'},
             delaySeconds:{type:'integer',minimum:0,maximum:86400,description:'0 for an immediate call; otherwise the exact delay in seconds, for example 30 for 30 seconds.'},
-            reason:{type:'string',description:'A short reason for the call, if relevant.'}
+            reason:{type:'string',maxLength:240,description:'A concise copy of the Chairman’s exact request. Preserve timing words such as now, later, or in 30 seconds.'}
           },
-          required:[],
+          required:['reason'],
           additionalProperties:false
         }
       },
