@@ -20,6 +20,7 @@ test('voice calls use the saved executive identity and an in-world action tool',
   assert.match(world,/Your name and identity are exactly/);
   assert.match(world,/createVapiActionToken/);
   assert.match(tools,/verifyVapiActionToken/);
+  assert.match(tools,/parseCallIntent\(reason\)/);
 });
 test('delayed callbacks use durable workflows and prompt incoming-call polling',()=>{
   assert.match(read('workflows/scheduled-call.js'),/await sleep/);
