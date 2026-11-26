@@ -75,3 +75,20 @@ test('Node-only database, push and token work is isolated in durable step functi
   assert.match(worldEngine,/export async function runWorldEngineTick[\s\S]*?"use step"/);
   assert.match(executiveActions,/export async function completeScheduledCall[\s\S]*?"use step"/);
 });
+
+test('engine release handover fences obsolete durable workers and renews without a browser',()=>{
+ const activation=read('lib/engine-activation.mjs'),workflow=read('workflows/world-engine.js'),migration=read('lib/migrate.mjs');
+ assert.match(activation,/ENGINE_KEY='2000-01-01'/);
+ assert.match(activation,/engine_runs.revision<EXCLUDED.revision/);
+ assert.match(activation,/retired:/);
+ assert.match(workflow,/await start\(worldEngine,\[day,token,interval\]\)/);
+ assert.match(migration,/engine_runs ADD COLUMN IF NOT EXISTS revision/);
+});
+test('world stages isolate failures and record their actual health',()=>{
+ const engine=read('lib/world-engine.mjs');
+ for(const stage of ['economy','tasks','approved-actions','communications','market','call-scheduling'])assert.ok(engine.includes("runStage(w,'"+stage+"'"));
+ assert.match(engine,/INSERT INTO engine_stage_status/);
+ assert.match(engine,/consecutive_failures/);
+ const comms=read('lib/autonomous-communications.mjs');
+ assert.match(comms,/decision.needsChairman&&decision.callReason&&!quiet/);
+});
