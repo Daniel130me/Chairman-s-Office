@@ -114,6 +114,8 @@ export function buildActivityFeed(state = {}, user = {}) {
     'acquisition-completed': 'acquisitions',
     'acquisition-approved': 'acquisitions',
     'travel-booking-confirmed': 'travel',
+    'stakeholder-contact': 'messages',
+    'supplier-quote': 'inventory',
     'hr-proposal': 'employees',
     'hr-review-completed': 'employees',
     'hr-decision': 'employees',
