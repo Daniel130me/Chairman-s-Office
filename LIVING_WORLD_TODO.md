@@ -86,3 +86,43 @@ Approved scope: 26 November 2026. Target: Next.js / Vercel / Neon / Vapi; instal
 - [ ] Test all phone apps, cross-app consistency, live meeting participation, character memory, source-grounded real events, multi-user tenancy and permissions; no real-world actions.
 - [ ] Load, cost, observability, job liveness, security, privacy, data retention/deletion, backup/restore, disaster recovery, build, migrations, preview, end-to-end device testing and release verification.
 - [ ] Final immersion test: leave world untouched three days, return to coherent independent activity, accurate balances, meaningful communications, decisions, appointments, people changes and explainable consequences; verify against stored records.
+
+## 15. Additional approved implementation scope (26 November 2026)
+
+The following systems were added after the original backlog was committed. "Code present" means implementation exists on the development branch; it does **not** mean end-to-end acceptance has passed.
+
+### Code present — acceptance still required
+- [ ] Company chart of accounts and expanded double-entry transaction types: cash, receivables, inventory, fixed assets, investments, payables, tax, loans, equity, revenue, operating expense, payroll, COGS, depreciation and interest.
+- [ ] Accrual invoice lifecycle: invoice issuance records receivable/revenue; payment records cash/receivable; financial statement balance check.
+- [ ] Company financial statement summaries: assets, liabilities, equity, revenue, expenses and net income.
+- [ ] Inventory items, weighted-average cost, stock movements, purchase orders, approval, goods receipt and supplier payment.
+- [ ] Company loan proposals, approval, disbursement, principal repayment and separate interest expense.
+- [ ] Acquisition proposals, approval, completion, investment ledger posting, portfolio holding and majority-owned subsidiary creation.
+- [ ] Family Office: personal accounts, personal ledger, assets, investment holdings, valuations and net-worth calculation, separate from company funds.
+- [ ] Travel & Lifestyle: personal/business trips, flight/hotel/ground/experience/private-aviation/security booking records; booking confirmation posts to the appropriate personal or company ledger.
+- [ ] Security & Risk: incident register, categories, severity, assignments, evidence, findings, false-alarm and resolution.
+- [ ] Philanthropy: personal/company grant proposal, approval and disbursement with corresponding ledger entries.
+- [ ] Unified Activity view combining world events, audit records, messages, calls, company ledger entries and approval requests.
+- [ ] Authenticated PWA launch starts the durable world workflow with database-based duplicate-run protection.
+- [ ] Approval-gated action proposals from internal executive text conversations; supported actions are persisted for Chairman approval rather than executed directly by the model.
+- [ ] Valid P-256 VAPID key pair configured on the Living World preview environment; service worker, manifest and offline shell served by preview.
+
+### Still required to finish these systems
+- [ ] Reconcile every balance-sheet account and verify the balance-check remains zero across every supported transaction type, including legacy opening balances.
+- [ ] Complete COGS on sales, supplier master records, multi-line purchase order editing, partial receipts/payments, returns, inventory adjustments and stocktakes.
+- [ ] Loan amortization schedules, accrued interest, covenants, collateral, refinancing and overdue-payment handling.
+- [ ] Acquisition due diligence, regulatory conditions, negotiation, partial consolidation, impairment, disposals and sale proceeds.
+- [ ] Personal inter-account transfers, liabilities, debts, asset upkeep, real-estate operating expenses and portfolio revaluation.
+- [ ] Travel booking refunds, itinerary changes, travel disruption, concierge and security workflows; no external airline/hotel integration is assumed.
+- [ ] Autonomous security/threat detection, assignment to security/legal staff, investigations and evidence-led escalation.
+- [ ] Foundation governance, charity verification, recurring grants and measurable impact reporting.
+- [ ] Push for all approved event categories (messages, voicemail, tasks, approvals, meetings and urgent events), per-device subscription management and real Android/iOS installed-PWA tests.
+- [ ] Audio voicemail/voice notes, recording consent, storage limits, playback, transcription and two-way continuation after missed calls.
+- [ ] Character-to-character calls and missed-call messages must be tested in both directions, not inferred from text-message support.
+- [ ] Executive action proposals must be verified end-to-end from natural-language intent through approval, execution, event propagation, phone update and subsequent character awareness.
+
+## 16. Current delivery rule
+- The living-world branch is the development source of truth; production remains untouched until release approval.
+- Preview database migrations are additive and have been applied incrementally. Production migrations must be backed up, reviewed and approved separately.
+- Passing CI/build is necessary but not sufficient. No feature is complete until its acceptance tests, tenant isolation, error/retry behavior and relevant PWA/device checks pass.
+- Do not mark the overall project complete while any required item in this master backlog remains unchecked.
