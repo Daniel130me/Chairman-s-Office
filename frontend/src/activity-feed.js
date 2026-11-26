@@ -120,6 +120,7 @@ export function buildActivityFeed(state = {}, user = {}) {
     'board-motion-decided': 'board',
     'relationship-outcome': 'intelligence',
     'character-goal-created': 'intelligence',
+    'character-initiative-opened': 'messages',
     'character-goal-progress': 'intelligence',
     'character-goal-completed': 'intelligence',
     'security-scenario-reported': 'security',
