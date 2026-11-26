@@ -1,7 +1,7 @@
 name: Next.js migration checks
 on:
   push:
-    branches: [nextjs-vercel-migration]
+    branches: [nextjs-vercel-migration, living-world]
   pull_request:
     branches: [main, nextjs-vercel-migration]
 permissions:
