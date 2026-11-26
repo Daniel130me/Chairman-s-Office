@@ -205,7 +205,7 @@ export async function meetingSpeak(user,meetingId,text){
  // by the executives who spoke before them in this same round.
  for(const person of contacts){
   try{
-   const context=await characterPrompt(user,person,history,w);
+   const context=await characterPrompt(user,person,history.map(turn=>({direction:turn.speaker,body:turn.message})),w);
    const prompt=buildMeetingPrompt({meetingTitle:m.title,empireName:w.name,person,attendees:contacts,history});
    const reply=await ask(context+' You are a distinct fictional executive in a private board meeting. Be candid, realistic and evidence-led. Do not invent financial facts or completed actions.',prompt,{fallback:null});
    if(!reply||typeof reply!=='string'||!reply.trim())continue;
