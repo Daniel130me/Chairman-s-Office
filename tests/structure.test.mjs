@@ -92,3 +92,14 @@ test('world stages isolate failures and record their actual health',()=>{
  const comms=read('lib/autonomous-communications.mjs');
  assert.match(comms,/decision.needsChairman&&decision.callReason&&!quiet/);
 });
+
+test('activity history is authenticated, tenant-scoped and uses stable cursor pagination',()=>{
+ const backend=read('lib/activity-history.mjs'),routes=read('lib/routes.mjs'),app=read('frontend/src/App.jsx');
+ assert.match(backend,/t\.user_id=\$1/);
+ assert.match(backend,/ORDER BY ts DESC,source DESC,id DESC LIMIT 151/);
+ assert.match(backend,/FOR UPDATE/);
+ assert.match(routes,/activity\/history/);
+ assert.match(routes,/activity\/visit/);
+ assert.match(app,/Load older activity/);
+ assert.match(app,/mergeActivityHistory/);
+});

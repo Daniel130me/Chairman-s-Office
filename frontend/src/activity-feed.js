@@ -731,3 +731,25 @@ export function buildActivityFeed(state = {}, user = {}) {
   }
   return deduplicated;
 }
+
+// Merge older records into the current snapshot without replacing live values.
+// Source paths are fixed by the backend registry; reject prototype-like keys.
+export function mergeActivityHistory(state,rows){
+ const out={...state,economy:{...state.economy},operations:{...state.operations}};
+ const groups=new Map();
+ for(const item of list(rows)){
+  const path=String(item?.source||'').split('.');
+  if(path.length>2||path.some(key=>!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(key)||['constructor','prototype','__proto__'].includes(key)))continue;
+  if(path.length===2&&!['economy','operations'].includes(path[0]))continue;
+  if(!item.record?.id)continue;
+  const key=path.join('.');if(!groups.has(key))groups.set(key,{path,records:[]});
+  groups.get(key).records.push(item.record);
+ }
+ for(const {path,records} of groups.values()){
+  const parent=path.length===2?out[path[0]]:out,key=path.at(-1);
+  const current=list(parent[key]),byId=new Map(records.map(record=>[record.id,record]));
+  for(const record of current)byId.set(record.id,record);
+  parent[key]=[...byId.values()];
+ }
+ return out;
+}

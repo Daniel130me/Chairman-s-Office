@@ -3,7 +3,7 @@ import {Phone,PhoneOff,MessageCircle,Users,CalendarDays,BriefcaseBusiness,Landma
 import Vapi from '@vapi-ai/web';
 import { authClient } from '../../lib/auth/client.js';
 import{api,usd,shortDate,shortTime,toUint8}from './api.js';import{playRing,stopRing,clickTone}from './sound.js';
-import {buildActivityFeed} from './activity-feed.js';
+import {buildActivityFeed,mergeActivityHistory} from './activity-feed.js';
 const icons={phone:Phone,messages:MessageCircle,contacts:Users,calendar:CalendarDays,board:BriefcaseBusiness,finance:Landmark,documents:FileText,deals:Scale,settings:SettingsIcon,intelligence:Globe2,news:Newspaper,assistant:Headphones,companies:Building2,employees:Users,activity:ClipboardList,operations:BriefcaseBusiness,investigations:ShieldCheck,approvals:Check,family:HandCoins,travel:Plane,security:ShieldCheck,giving:HeartHandshake,inventory:Boxes,loans:Landmark,acquisitions:TrendingUp,mail:MailIcon};
 const apps=[['phone','Phone','#16b662'],['messages','Messages','#2687ee'],['contacts','Contacts','#ed9070'],['calendar','Calendar','#f5f6f9'],['board','Boardroom','#615ac9'],['finance','Finance','#129ba0'],['companies','Portfolio','#3c79db'],['employees','Employees','#bb7656'],['activity','Activity','#55788e'],['operations','Operations','#287e82'],['investigations','Investigations','#b77c45'],['approvals','Approvals','#3577bb'],['family','Family Office','#4b8c74'],['travel','Travel & Lifestyle','#467e9e'],['security','Security','#b45a55'],['giving','Philanthropy','#4d8d79'],['inventory','Inventory','#9b7545'],['loans','Loans','#557b9e'],['acquisitions','Investments','#3d8878'],['news','News','#567fbd'],['mail','Mail','#357fbe'],['documents','Documents','#e7b452'],['deals','Deals','#ad84d4'],['intelligence','Intelligence','#705ac6'],['assistant','Chief of Staff','#d8aa68'],['settings','Settings','#8490a1']];
 const dayLabel=d=>new Date(d).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
@@ -470,13 +470,28 @@ function News({state,onBack}){
 function Activity({state,user,onBack,targetEventId,onOpen}){
  const [query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[period,setPeriod]=useState('all');
  const [catchUp,setCatchUp]=useState({ready:false,lastSeenAt:null,firstVisit:true});
- const storageKey='chairmans-office-activity-last-seen:'+(user?.id||state.world?.id||'guest');
+ const [history,setHistory]=useState({rows:[],cursor:null,loading:true,error:null});
+ const visitId=useRef(null),historyBusy=useRef(false);
  useEffect(()=>{
-  let previous=null;
-  try{previous=window.localStorage.getItem(storageKey);window.localStorage.setItem(storageKey,new Date().toISOString());}catch{}
-  setCatchUp({ready:true,lastSeenAt:previous,firstVisit:!previous});
- },[storageKey]);
- const items=useMemo(()=>buildActivityFeed(state,user),[state,user]);
+  let active=true;
+  visitId.current ||= globalThis.crypto.randomUUID();
+  api('/activity/visit',{method:'POST',body:{visitId:visitId.current}})
+   .then(r=>{if(active)setCatchUp({ready:true,lastSeenAt:r.lastSeenAt,firstVisit:!r.lastSeenAt});})
+   .catch(()=>{if(active)setCatchUp({ready:false,lastSeenAt:null,firstVisit:true});});
+  api('/activity/history').then(r=>{if(active)setHistory({rows:r.rows||[],cursor:r.nextCursor,loading:false,error:null});})
+   .catch(e=>{if(active)setHistory({rows:[],cursor:null,loading:false,error:e.message});});
+  return()=>{active=false};
+ },[user?.id]);
+ const loadOlder=async()=>{
+  if(historyBusy.current)return;historyBusy.current=true;
+  setHistory(h=>({...h,loading:true,error:null}));
+  try{
+   const r=await api('/activity/history'+(history.cursor?'?cursor='+encodeURIComponent(history.cursor):''));
+   setHistory(h=>({rows:[...h.rows,...(r.rows||[])],cursor:r.nextCursor,loading:false,error:null}));
+  }catch(e){setHistory(h=>({...h,loading:false,error:e.message}));}
+  finally{historyBusy.current=false;}
+ };
+ const items=useMemo(()=>buildActivityFeed(mergeActivityHistory(state,history.rows),user),[state,history.rows,user]);
  useEffect(()=>{if(targetEventId){const target=document.getElementById('activity-'+targetEventId);target?.scrollIntoView({behavior:'smooth',block:'center'});}},[targetEventId,items.length]);
  const sinceLastVisit=items.filter(item=>{const time=new Date(item.timestamp).getTime();return time<=Date.now()&&(!catchUp.lastSeenAt||time>new Date(catchUp.lastSeenAt).getTime());});
  const newMessages=sinceLastVisit.filter(item=>item.category==='communication').length;
@@ -515,15 +530,15 @@ function Activity({state,user,onBack,targetEventId,onOpen}){
  },[filtered]);
  const icons={communication:PhoneCall,meetings:CalendarDays,finance:Landmark,people:Users,security:ShieldCheck,personal:HandCoins,intelligence:Globe2,documents:FileText,approvals:Check,business:BriefcaseBusiness};
  const participationLabel=item=>item.participation==='you'?'You participated':item.participation==='addressed'?'You were contacted':'While you were away';
- return <><AppHeader title="Activity" back={onBack} subtitle="Your executive world · complete recorded timeline"/>
+ return <><AppHeader title="Activity" back={onBack} subtitle="Your executive world · recorded timeline"/>
   <div className="activity-screen">
    <section className="activity-welcome">
     <div className="activity-welcome-head">
-     <div><span className="activity-eyebrow">YOUR EXECUTIVE BRIEFING</span><h2>{user?.name?'Welcome back, '+user.name.split(' ')[0]:'Welcome back, Chairman'}</h2><p>{catchUp.firstVisit?'Your first visit to Activity. Here is the recorded history available in your office.':sinceLastVisit.length?'Here is what happened since your last visit.':'No new activity since your last visit. Your full timeline is below.'}</p></div>
+     <div><span className="activity-eyebrow">YOUR EXECUTIVE BRIEFING</span><h2>{user?.name?'Welcome back, '+user.name.split(' ')[0]:'Welcome back, Chairman'}</h2><p>{catchUp.firstVisit?'Your first visit to Activity. Here is the recorded history available in your office.':sinceLastVisit.length?'Here is the loaded activity since your last visit.':'No new activity in the loaded history since your last visit.'}</p></div>
      <span className="activity-welcome-icon"><Clock3 size={25}/></span>
     </div>
     <div className="activity-stats">
-     <div className="activity-stat"><strong>{catchUp.ready?sinceLastVisit.length:'—'}</strong><small>{catchUp.firstVisit?'Recorded events':'Events since last visit'}</small></div>
+     <div className="activity-stat"><strong>{catchUp.ready?sinceLastVisit.length:'—'}</strong><small>{catchUp.firstVisit?'Loaded records':'Loaded since last visit'}</small></div>
      <div className="activity-stat"><strong>{catchUp.ready?newMessages:'—'}</strong><small>Calls & messages</small></div>
      <div className="activity-stat"><strong>{catchUp.ready?needsAttention:'—'}</strong><small>Need attention</small></div>
     </div>
@@ -554,6 +569,9 @@ function Activity({state,user,onBack,targetEventId,onOpen}){
      </div>
     </section>)}
    </div>:<Empty title={items.length?'No matching activity':'No recorded activity'} description={items.length?'Try another filter, date range or search term.':'Calls, conversations, meetings, decisions and business developments will appear here.'}/>}
+   {history.error&&<p className="activity-footnote">History could not be loaded: {history.error}</p>}
+   {(history.cursor||history.error||history.loading)&&<button type="button" className="activity-filter" disabled={history.loading} onClick={loadOlder}>{history.loading?'Loading history…':history.error?'Retry history':'Load older activity'}</button>}
+   {history.cursor&&<p className="activity-footnote">Older records are available. Counts and searches cover loaded records.</p>}
    <p className="activity-footnote">The timeline is built from recorded office events and business records. It does not invent activity when no record exists.</p>
   </div>
  </>;
