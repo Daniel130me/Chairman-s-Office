@@ -11,3 +11,9 @@ test('notification text does not expose confidential event details',()=>{
  assert.equal(item.body,'A new investigation needs your attention.');
  assert.ok(pushEventKinds.includes('approval-requested'));
 });
+
+test('push notification targets open the relevant phone application',()=>{
+ assert.equal(notificationForEvent('news-digest').target,'news');
+ assert.equal(notificationForEvent('missed-call-message').target,'messages');
+ assert.equal(notificationForEvent('approval-requested').target,'approvals');
+});
