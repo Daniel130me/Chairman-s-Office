@@ -1,9 +1,13 @@
-const CACHE='chairmans-office-v2';
-self.addEventListener('install',event=>{event.waitUntil(self.skipWaiting());});
+const CACHE='chairmans-office-v3';
+self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.add('/offline.html')).catch(()=>{}).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE&&k.startsWith('chairmans-office')).map(k=>caches.delete(k))))]));});
 // Immutable assets only: do not cache private responses, HTML or reset links.
 self.addEventListener('fetch',event=>{
   const url=new URL(event.request.url);
+  if(event.request.method==='GET'&&url.origin===self.location.origin&&event.request.mode==='navigate'){
+    event.respondWith(fetch(event.request).catch(async()=>await caches.match('/offline.html')));
+    return;
+  }
   if(event.request.method!=='GET'||url.origin!==self.location.origin||!url.pathname.startsWith('/_next/static/'))return;
   event.respondWith(caches.open(CACHE).then(async cache=>{const cached=await cache.match(event.request);if(cached)return cached;const response=await fetch(event.request);if(response.ok)await cache.put(event.request,response.clone());return response;}));
 });
