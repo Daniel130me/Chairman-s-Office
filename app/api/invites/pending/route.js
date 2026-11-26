@@ -1,5 +1,5 @@
 import {requireUser} from '../../../../lib/profile.mjs';
-import {pendingInvites} from '../../../../backend/src/world.mjs';
+import {pendingInvites} from '../../../../lib/incoming-calls.mjs';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
