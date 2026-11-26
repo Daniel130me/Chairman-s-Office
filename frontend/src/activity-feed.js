@@ -166,13 +166,14 @@ export function buildActivityFeed(state = {}, user = {}) {
     const incoming = normalise(message.direction) === 'incoming';
     const contact = contactName(message.contact_id) || 'Contact';
     const email = normalise(message.channel) === 'email';
+    const voice=['voicemail','voice-note'].includes(message.channel);
     add('message', message, {
       date: message.created_at,
-      kind: email ? 'email' : 'message',
+      kind: email ? 'email' : voice ? message.channel : 'message',
       category: 'communication',
       title: incoming
-        ? `${email ? 'Email' : 'Message'} from ${contact}`
-        : `${email ? 'Email sent to' : 'Message sent to'} ${contact}`,
+        ? `${email ? 'Email' : voice ? 'Voice message' : 'Message'} from ${contact}`
+        : `${email ? 'Email sent to' : voice ? 'Voice message to' : 'Message sent to'} ${contact}`,
       body: [message.subject, message.body].filter(Boolean).join(' — '),
       source: email ? 'Mail' : 'Messages',
       actor: incoming ? contact : user?.name || 'You',

@@ -103,3 +103,5 @@ test('activity history is authenticated, tenant-scoped and uses stable cursor pa
  assert.match(app,/Load older activity/);
  assert.match(app,/mergeActivityHistory/);
 });
+
+test('voice notes use private authenticated playback and stable call linkage',()=>{const routes=read('lib/routes.mjs'),notes=read('lib/voice-notes.mjs'),app=read('frontend/src/App.jsx');assert.match(routes,/requireUser\(\)/);assert.match(notes,/v\.user_id=\$2/);assert.match(notes,/x-transcription-consent/);assert.match(notes,/client_message_key/);assert.match(app,/MediaRecorder/);assert.match(app,/api\/voice-notes/);});

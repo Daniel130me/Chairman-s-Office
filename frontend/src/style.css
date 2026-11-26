@@ -80,3 +80,5 @@
 .shade-activity-link button{width:100%;display:flex;align-items:center;gap:9px;padding:13px 14px;border-radius:14px;background:#eaf0f8;color:#334a69;font-size:12px;font-weight:800;text-align:left}
 .shade-activity-link button svg:last-child{margin-left:auto}
 @media(max-width:370px){.activity-screen{padding-left:13px;padding-right:13px}.activity-welcome{padding:15px}.activity-welcome h2{font-size:19px}.activity-stat{padding:9px 7px}.activity-stat strong{font-size:19px}.activity-period{max-width:82px;font-size:9px}}
+
+.voice-playback,.voice-draft audio,.voice-list-item audio{width:100%;max-width:250px;height:40px;margin:5px 0}.voice-draft{display:flex;align-items:center;gap:6px;padding:10px;border-top:1px solid var(--line)}.voice-draft audio{min-width:0;flex:1}.voice-draft button{padding:8px;border-radius:10px;background:var(--card);color:var(--ink)}.chat-compose button.recording{background:#b83240;color:white}.voice-recording-label{font-size:11px;text-align:center;color:#b83240;margin:4px 8px}.voice-list-item{padding:4px 12px;border-bottom:1px solid var(--line)}.voice-list-item audio{margin-left:10px}
