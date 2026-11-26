@@ -21,5 +21,5 @@ test('inventory and acquisition tables are explicitly declared',()=>{
 });
 test('schema template contains only complete SQL statements',()=>{
  const statements=sql.split(';').map(s=>s.trim()).filter(Boolean);
- for(const statement of statements)assert.match(statement,/^(CREATE|ALTER|DROP|UPDATE|INSERT|DELETE)\\b/i,statement.slice(0,160));
+ for(const statement of statements)assert.match(statement,/^(CREATE|ALTER|DROP|UPDATE|INSERT|DELETE)\b/i,statement.slice(0,160));
 });
