@@ -27,6 +27,10 @@ test('asks one clarification when a callback has no time',()=>{
   );
 });
 
+test('asks for a precise time instead of treating later as now',()=>{
+  assert.match(parseCallIntent('Please ask the CFO to call me later.').clarification,/When should I ask the CFO to call you/);
+});
+
 test('rejects callback delays longer than one day',()=>{
   assert.match(parseCallIntent('Call me back in 48 hours.').clarification,/24 hours/);
 });
