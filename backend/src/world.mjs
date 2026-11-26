@@ -1,6 +1,7 @@
 import {sql,one,transaction,uid,iso} from './db.mjs';
 import {ask} from './ai.mjs';
 import {parseCallIntent} from '../../lib/executive-intents.mjs';
+import {normalizeMailSubject,replyMailSubject} from '../../lib/mail-rules.mjs';
 import {scheduleExecutiveCall} from '../../lib/call-workflow.mjs';
 import {createVapiActionToken} from '../../lib/vapi-action-token.mjs';
 import {economySnapshot} from '../../lib/economy.mjs';
@@ -74,16 +75,18 @@ async function classifyBusinessAction(user,contact,body,operationKeyValue){
  const request=await requestAction(user,contact.id,{actionType:parsed.actionType,title:parsed.title,reason:parsed.reason,payload:parsed.payload||{},operationKey:operationKeyValue});
  return {request};
 }
-export async function message(user,contactId,body,channel='chat',sourceCallId=null){
+export async function message(user,contactId,body,channel='chat',sourceCallId=null,subject=null){
   body=String(body||'').trim().slice(0,3500);
   if(!body)throw Error('Write a message.');
+  if(channel!=='chat'&&channel!=='email')throw Error('Invalid message channel.');
+  const mailSubject=channel==='email'?normalizeMailSubject(subject):null;
   const c=await one('SELECT * FROM contacts WHERE id=$1 AND user_id=$2',[contactId,user.id]);
   const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);
   if(!c||!w)throw Error('Contact unavailable');
 
   if(sourceCallId&&!await one("SELECT id FROM calls WHERE id=$1 AND user_id=$2 AND world_id=$3 AND contact_id=$4 AND status='missed'",[sourceCallId,user.id,w.id,c.id]))throw Error('Call unavailable');
   const outgoingId=uid();
-  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,source_call_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[outgoingId,user.id,w.id,c.id,'outgoing',sourceCallId?'missed-call':channel,body,sourceCallId]);
+  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,source_call_id,subject) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[outgoingId,user.id,w.id,c.id,'outgoing',sourceCallId?'missed-call':channel,body,sourceCallId,mailSubject]);
   const history=(await sql('SELECT direction,body FROM messages WHERE user_id=$1 AND contact_id=$2 ORDER BY created_at DESC LIMIT 12',[user.id,c.id])).reverse();
   const intent=parseCallIntent(body);
   let reply;
@@ -120,14 +123,14 @@ export async function message(user,contactId,body,channel='chat',sourceCallId=nu
     if(proposed?.clarification)reply=proposed.clarification;
     else if(proposed?.request)reply='Chairman, I have submitted “'+proposed.request.title+'” to your Approvals app with the supporting reason. Nothing has been executed yet; I will proceed only after your decision.';
     else reply=await ask(
-      (await characterPrompt(user,c,history,w))+' Previous calls: '+(await sql("SELECT summary FROM calls WHERE user_id=$1 AND contact_id=$2 AND status='completed' ORDER BY ended_at DESC LIMIT 3",[user.id,c.id])).map(x=>x.summary).join(' | ').slice(0,3500),
-      'The Chairman says: '+body+'\nRespond as '+c.name+'.',
+      (await characterPrompt(user,c,history,w))+(channel==='email'?' You are replying to a business email. Write a concise, professional email response with a greeting and sign-off. Do not invent email addresses.':'')+' Previous calls: '+(await sql("SELECT summary FROM calls WHERE user_id=$1 AND contact_id=$2 AND status='completed' ORDER BY ended_at DESC LIMIT 3",[user.id,c.id])).map(x=>x.summary).join(' | ').slice(0,3500),
+      (channel==='email'?'The Chairman sent this email: ':'The Chairman says: ')+body+'\nRespond as '+c.name+'.',
       {fallback:null}
     );
   }
 
   if(!reply)return {reply:null,delivery:'saved-no-reply'};
-  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,w.id,c.id,'incoming',channel,reply]);
+  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,subject) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[uid(),user.id,w.id,c.id,'incoming',channel,reply,channel==='email'?replyMailSubject(mailSubject):null]);
   await sql('UPDATE contacts SET last_contact_at=now() WHERE id=$1',[c.id]);
   return {reply};
 }
