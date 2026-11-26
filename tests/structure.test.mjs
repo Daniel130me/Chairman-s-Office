@@ -66,8 +66,8 @@ test('workflow entrypoints only orchestrate isolated Node-capable step modules',
   assert.doesNotMatch(callWorkflow,/lib\/executive-actions|node:crypto|web-push/);
   assert.match(worldWorkflow,/runTick/);
   assert.match(callWorkflow,/deliver\(/);
-  assert.match(worldStep,/"use step"/);
+  assert.match(worldStep,/^"use step";/);
   assert.match(worldStep,/tick\(interval\)/);
-  assert.match(callStep,/"use step"/);
+  assert.match(callStep,/^"use step";/);
   assert.match(callStep,/completeScheduledCall/);
 });
