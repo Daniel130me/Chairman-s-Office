@@ -1,5 +1,8 @@
 import {sql,one,transaction,uid,iso} from './db.mjs';
 import {ask} from './ai.mjs';
+import {parseCallIntent} from '../../lib/executive-intents.mjs';
+import {scheduleExecutiveCall} from '../../lib/call-workflow.mjs';
+import {createVapiActionToken} from '../../lib/vapi-action-token.mjs';
 const internal=[['Amara Okafor','Chief of Staff','Measured, perceptive and fiercely discreet','Protect the Chairman’s time and long-term reputation'],['Daniel Mercer','Group CFO','Precise, skeptical and analytically rigorous','Preserve liquidity and challenge weak forecasts'],['Nadia Mensah','Chief Operating Officer','Pragmatic, decisive and direct','Keep subsidiaries performing and execution realistic'],['Julian Hart','General Counsel','Calm, exacting and cautious','Prevent reputational and contractual exposure'],['Sophia Vale','Group Strategy Director','Creative, ambitious and competitive','Pursue defensible expansion opportunities'],['Marcus Reid','Board Chair','Independent and challenging','Ensure accountability and shareholder discipline']];
 const external=[['Aisha Rahman','Managing Partner','Meridian Capital','investor','Sharp and guarded','Earn favorable terms and obtain influence'],['Victor Sloane','CEO','Sloane Meridian Group','rival','Assertive and calculating','Outcompete the Chairman in key sectors'],['Elena Moretti','Founder','Moretti Ventures','friend','Warm but candid','Find joint ventures without sacrificing independence'],['Kwame Bediako','Regional Director','Atlas Infrastructure','partner','Dependable and cautious','Win strategic delivery contracts'],['Isabelle Laurent','Market Analyst','Independent Advisory','adviser','Thoughtful and sometimes contrarian','Help the Chairman see hidden risks'],['Farah Nasser','Managing Director','Sterling Procurement','vendor','Persuasive and opportunistic','Win competitive bids with profitable terms']];
 const scenarios=[['Strategic acquisition opportunity','A privately held competitor may be available at an attractive valuation. Finance wants diligence before any commitment.','strategy','high'],['Treasury and liquidity outlook','The CFO is reviewing cash reserves against an accelerated expansion plan.','finance','normal'],['Board governance review','The board has requested a clear explanation of execution risks and capital allocation.','board','high'],['New regional partnership','A cross-border partner has proposed commercial collaboration with meaningful upside and operational dependencies.','deal','normal'],['Reputation and stakeholder confidence','External stakeholders are watching how the group responds to shifting market conditions.','risk','normal']];
@@ -10,16 +13,100 @@ const contacts=[];for(const [idx,entry] of [...internal,...external].entries()){
 for(let i=0;i<scenarios.length;i++){const [title,summary,category,priority]=scenarios[i],id=uid(),actor=contacts[(i+1)%contacts.length];await q('INSERT INTO threads(id,user_id,world_id,company_id,contact_id,title,category,summary,priority) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[id,user.id,wid,companies[i%companies.length].id,actor.id,title,category,summary,priority]);await q('INSERT INTO events(id,user_id,world_id,thread_id,contact_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[uid(),user.id,wid,id,actor.id,'briefing',title,summary]);}
 const greeting=`Good morning, ${user.name}. Your office is established. Your leadership team is waiting, and the first matters are on your desk. I would like to brief you personally before the day begins.`;await q('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,wid,contacts[0].id,'incoming','chat',greeting]);await q('INSERT INTO invites(id,user_id,world_id,contact_id,kind,subject,preview,due_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval \'20 seconds\')',[uid(),user.id,wid,contacts[0].id,'welcome',`Incoming call · ${chief}`,'Your chief of staff would like to welcome you personally.']);await q('INSERT INTO documents(id,user_id,world_id,title,kind,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,wid,'Chairman’s First Executive Brief','briefing',`CONFIDENTIAL — CHAIRMAN’S OFFICE\n\nGroup: ${name}\nHeadquarters: ${region}\nPortfolio: ${sectors.join(', ')}\n\nFirst priorities:\n• Meet the leadership team\n• Review treasury and growth strategy\n• Establish board reporting cadence\n• Evaluate the acquisition proposal`]);const tid=uid();await q('INSERT INTO tenders(id,user_id,world_id,title,budget) VALUES($1,$2,$3,$4,$5)',[tid,user.id,wid,'Regional technology modernization programme',24000000]);for(const [j,c] of contacts.slice(-3).entries())await q('INSERT INTO bids(id,user_id,tender_id,contact_id,amount,weeks,quality,risk) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[uid(),user.id,tid,c.id,22000000+j*1700000,14+j*4,86-j*7,j?'moderate':'low']);return {id:wid,name,region,timezone,sectors,chief,style};});}
 export async function state(userId){const world=await one('SELECT * FROM worlds WHERE user_id=$1',[userId]);if(!world)return null;const tables=['companies','contacts','threads','events','messages','meetings','meeting_turns','documents','decisions','invites','calls','tenders','bids'];const outputs=await Promise.all(tables.map(t=>sql(`SELECT * FROM ${t} WHERE user_id=$1 ORDER BY ${t==='calls'?'started_at':'created_at'} DESC LIMIT 400`,[userId])));const data=Object.fromEntries(tables.map((t,i)=>[t,outputs[i]]));data.meetings=data.meetings.map(m=>({...m,attendees:m.attendees||[]}));data.tenders=data.tenders.map(t=>({...t,bids:data.bids.filter(b=>b.tender_id===t.id)}));data.settings=await one('SELECT * FROM settings WHERE user_id=$1',[userId]);return {world,...data};}
-async function characterPrompt(user,contact,history,world){return `You are ${contact.name}, ${contact.title} at ${contact.company} in an immersive FICTIONAL executive world called Chairman's Office. The Chairman is ${user.name}, leading ${world.name} in ${world.region}. You have your own incentives, knowledge, pride, human flaws and commitments. Temperament: ${contact.temperament}. Personal agenda: ${contact.agenda}. Trust: ${contact.trust}/100; tension: ${contact.tension}/100. Recent exchange: ${history.map(m=>`${m.direction}: ${m.body}`).join(' | ').slice(-3500)}. Speak naturally, distinctly and credibly like a senior professional. You may disagree, ask questions, negotiate or hold back information when consistent with your character. Maintain continuity, specificity and consequences. Do not claim any real-world external action occurred. Reply in plain conversational text, usually 1-4 sentences.`;}
-export async function message(user,contactId,body,channel='chat'){body=String(body||'').trim().slice(0,3500);if(!body)throw Error('Write a message.');const c=await one('SELECT * FROM contacts WHERE id=$1 AND user_id=$2',[contactId,user.id]);const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);if(!c||!w)throw Error('Contact unavailable');await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,w.id,c.id,'outgoing',channel,body]);const history=(await sql('SELECT direction,body FROM messages WHERE user_id=$1 AND contact_id=$2 ORDER BY created_at DESC LIMIT 12',[user.id,c.id])).reverse();const reply=await ask(await characterPrompt(user,c,history,w),`The Chairman says: ${body}\nRespond as ${c.name}.`,{fallback:`I hear you, Chairman. On ${c.agenda.toLowerCase()}, I would suggest we make the trade-offs explicit before we commit. What outcome matters most to you?`});await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,w.id,c.id,'incoming',channel,reply]);await sql('UPDATE contacts SET last_contact_at=now(),trust=least(100,trust+1) WHERE id=$1',[c.id]);return {reply};}
-export async function makeInvite(user,contactId){const c=await one('SELECT * FROM contacts WHERE id=$1 AND user_id=$2',[contactId,user.id]);const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);if(!c||!w)throw Error('Contact unavailable');return one('INSERT INTO invites(id,user_id,world_id,contact_id,kind,subject,preview,due_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()) RETURNING *',[uid(),user.id,w.id,c.id,'requested',`Incoming call · ${c.name}`,`${c.name} is available to speak.`]);}
-export async function startCall(user,contactId,inviteId=null){const c=await one('SELECT * FROM contacts WHERE id=$1 AND user_id=$2',[contactId,user.id]),w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);if(!c||!w)throw Error('Contact unavailable');const call=await transaction(async q=>{
-  if(inviteId){
-    const rows=await q("UPDATE invites SET status='answered' WHERE id=$1 AND user_id=$2 AND contact_id=$3 AND status='pending' AND due_at<=now() RETURNING id",[inviteId,user.id,c.id]);
-    if(!rows.length)throw Error('Invitation unavailable');
+export async function pendingInvites(userId){
+  return sql("SELECT * FROM invites WHERE user_id=$1 AND status='pending' AND due_at<=now() ORDER BY due_at ASC LIMIT 10",[userId]);
+}
+async function characterPrompt(user,contact,history,world){
+  return [
+    'You are '+contact.name+', '+contact.title+' at '+contact.company+' in the Chairman’s Office, an immersive fictional executive world.',
+    'The Chairman is '+user.name+', leading '+world.name+' in '+world.region+'.',
+    'Your name and identity are exactly '+contact.name+'. The executive directory is the source of truth. Never claim your name is Amara unless your directory name is Amara. Never replace your identity with another character’s name.',
+    'This is a fictional business world, but your role, relationships, commitments and actions inside it are persistent and consequential. Never break character by saying you cannot call or coordinate with colleagues because the world is simulated.',
+    'Do not claim real-world external actions occurred. You may complete supported actions inside the Chairman’s Office experience and must rely on their actual tool results before confirming success.',
+    'You have your own incentives, knowledge, pride, human flaws and commitments. Temperament: '+contact.temperament+'. Personal agenda: '+contact.agenda+'. Trust: '+contact.trust+'/100; tension: '+contact.tension+'/100.',
+    'Recent exchange: '+history.map(m=>m.direction+': '+m.body).join(' | ').slice(-3500)+'.',
+    'Speak naturally, distinctly and credibly like a senior professional. You may disagree, ask questions, negotiate or hold back information when consistent with your character. Maintain continuity, specificity and consequences. Reply in plain conversational language, usually 1–4 sentences.'
+  ].join(' ');
+}
+export async function message(user,contactId,body,channel='chat'){
+  body=String(body||'').trim().slice(0,3500);
+  if(!body)throw Error('Write a message.');
+  const c=await one('SELECT * FROM contacts WHERE id=$1 AND user_id=$2',[contactId,user.id]);
+  const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);
+  if(!c||!w)throw Error('Contact unavailable');
+
+  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,w.id,c.id,'outgoing',channel,body]);
+  const history=(await sql('SELECT direction,body FROM messages WHERE user_id=$1 AND contact_id=$2 ORDER BY created_at DESC LIMIT 12',[user.id,c.id])).reverse();
+  const intent=parseCallIntent(body);
+  let reply;
+
+  if(intent?.clarification){
+    reply=intent.clarification;
+  }else if(intent){
+    try{
+      const action=await scheduleExecutiveCall({
+        userId:user.id,
+        worldId:w.id,
+        recipient:intent.recipient,
+        defaultContactId:c.id,
+        delaySeconds:intent.delaySeconds,
+        kind:intent.kind,
+        reason:body
+      });
+      if(intent.kind==='assistant-callback'){
+        const delay=action.delaySeconds;
+        const when=delay<60?delay+' seconds':delay%60===0?(delay/60)+' minutes':Math.floor(delay/60)+' minutes and '+(delay%60)+' seconds';
+        reply='Of course, Chairman. I have scheduled my callback for '+when+'. It will arrive on your executive line.';
+      }else if(action.delaySeconds===0){
+        reply='Certainly, Chairman. I have asked '+action.contact.name+', our '+action.contact.title+', to call you. Their incoming call will appear on your executive line once this conversation ends.';
+      }else{
+        const delay=action.delaySeconds;
+        const when=delay<60?delay+' seconds':delay%60===0?(delay/60)+' minutes':Math.floor(delay/60)+' minutes and '+(delay%60)+' seconds';
+        reply='Certainly, Chairman. I have arranged for '+action.contact.name+', our '+action.contact.title+', to call you in '+when+'.';
+      }
+    }catch(error){
+      reply='I could not arrange that call just now. '+String(error?.message||'Please try again.');
+    }
+  }else{
+    reply=await ask(
+      await characterPrompt(user,c,history,w),
+      'The Chairman says: '+body+'\nRespond as '+c.name+'.',
+      {fallback:'I hear you, Chairman. On '+c.agenda.toLowerCase()+', I would suggest we make the trade-offs explicit before we commit. What outcome matters most to you?'}
+    );
   }
-  return (await q('INSERT INTO calls(id,user_id,world_id,contact_id,invite_id) VALUES($1,$2,$3,$4,$5) RETURNING *',[uid(),user.id,w.id,c.id,inviteId]))[0];
-});const h=await sql('SELECT direction,body FROM messages WHERE user_id=$1 AND contact_id=$2 ORDER BY created_at DESC LIMIT 10',[user.id,c.id]);const previous=await sql("SELECT summary FROM calls WHERE user_id=$1 AND contact_id=$2 AND status='completed' ORDER BY ended_at DESC LIMIT 3",[user.id,c.id]);return {call,contact:c,context:(await characterPrompt(user,c,h.reverse(),w))+' Previous calls: '+previous.map(p=>p.summary).join(' | ').slice(0,3500),assistantId:c.vapi_assistant_id||process.env.VAPI_ASSISTANT_ID||null};}
+
+  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,w.id,c.id,'incoming',channel,reply]);
+  await sql('UPDATE contacts SET last_contact_at=now(),trust=least(100,trust+1) WHERE id=$1',[c.id]);
+  return {reply};
+}
+export async function makeInvite(user,contactId){const c=await one('SELECT * FROM contacts WHERE id=$1 AND user_id=$2',[contactId,user.id]);const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);if(!c||!w)throw Error('Contact unavailable');return one('INSERT INTO invites(id,user_id,world_id,contact_id,kind,subject,preview,due_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()) RETURNING *',[uid(),user.id,w.id,c.id,'requested',`Incoming call · ${c.name}`,`${c.name} is available to speak.`]);}
+export async function startCall(user,contactId,inviteId=null){
+  const c=await one('SELECT * FROM contacts WHERE id=$1 AND user_id=$2',[contactId,user.id]);
+  const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);
+  if(!c||!w)throw Error('Contact unavailable');
+
+  const call=await transaction(async q=>{
+    if(inviteId){
+      const rows=await q("UPDATE invites SET status='answered' WHERE id=$1 AND user_id=$2 AND contact_id=$3 AND status='pending' AND due_at<=now() RETURNING id",[inviteId,user.id,c.id]);
+      if(!rows.length)throw Error('Invitation unavailable');
+    }
+    return (await q('INSERT INTO calls(id,user_id,world_id,contact_id,invite_id) VALUES($1,$2,$3,$4,$5) RETURNING *',[uid(),user.id,w.id,c.id,inviteId]))[0];
+  });
+
+  const history=await sql('SELECT direction,body FROM messages WHERE user_id=$1 AND contact_id=$2 ORDER BY created_at DESC LIMIT 10',[user.id,c.id]);
+  const previous=await sql("SELECT summary FROM calls WHERE user_id=$1 AND contact_id=$2 AND status='completed' ORDER BY ended_at DESC LIMIT 3",[user.id,c.id]);
+  const colleagues=await sql('SELECT name,title,company FROM contacts WHERE user_id=$1 AND id<>$2 ORDER BY title,name',[user.id,c.id]);
+  const actionToken=createVapiActionToken({userId:user.id,callId:call.id,sourceContactId:c.id});
+
+  return {
+    call,
+    contact:c,
+    context:(await characterPrompt(user,c,history.reverse(),w))+' Previous calls: '+previous.map(p=>p.summary).join(' | ').slice(0,3500),
+    assistantId:c.vapi_assistant_id||process.env.VAPI_ASSISTANT_ID||null,
+    actionToken,
+    colleagues
+  };
+}
 export async function finishCall(user,id,transcript,status='completed'){const call=await one('SELECT * FROM calls WHERE id=$1 AND user_id=$2',[id,user.id]);if(!call)throw Error('Call unavailable');if(call.status!=='active')return {summary:call.summary};const rows=Array.isArray(transcript)?transcript.filter(x=>x&&typeof x==='object').slice(0,150).map(x=>({role:String(x.role||'speaker').slice(0,30),text:String(x.text||'').slice(0,3000)})):[];const summary=await ask('Summarize this fictional executive conversation precisely: decisions, commitments, risks, follow-ups. Do not invent facts.',JSON.stringify(rows),{fallback:rows.map(r=>`${r.role}: ${r.text}`).join(' ').slice(0,1500)||'Call completed; no transcript available.'});const updated=await one("UPDATE calls SET ended_at=now(),status=$4,transcript=$1,summary=$2 WHERE id=$3 AND user_id=$5 AND status='active' RETURNING summary",[JSON.stringify(rows),summary,id,status==='failed'?'failed':'completed',user.id]);return {summary:updated?.summary??(await one('SELECT summary FROM calls WHERE id=$1 AND user_id=$2',[id,user.id]))?.summary};}
 export async function createMeeting(user,data){const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);if(!w)throw Error('Empire unavailable');const title=String(data.title||'Leadership strategy discussion').slice(0,140);const selected=Array.isArray(data.attendees)?data.attendees.slice(0,10):[];const c=await sql('SELECT id FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[])',[user.id,selected]);if(!c.length)throw Error('Select attendees');return one('INSERT INTO meetings(id,user_id,world_id,title,start_at,attendees,duration_minutes) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',[uid(),user.id,w.id,title,data.start_at||iso(),JSON.stringify(c.map(x=>x.id)),Math.min(120,Math.max(10,Number(data.duration_minutes)||45))]);}
 export async function meetingSpeak(user,meetingId,text){const m=await one('SELECT * FROM meetings WHERE id=$1 AND user_id=$2',[meetingId,user.id]);if(!m||m.status==='concluded')throw Error('Meeting unavailable');const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);const contacts=await sql('SELECT * FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[])',[user.id,m.attendees]);const previous=await sql('SELECT speaker,message FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 20',[meetingId,user.id]);text=String(text||'What are your assessments of the situation?').slice(0,3000);await sql('INSERT INTO meeting_turns(id,user_id,meeting_id,speaker,message) VALUES($1,$2,$3,$4,$5)',[uid(),user.id,m.id,user.name,text]);const person=contacts[(await one('SELECT count(*)::int AS n FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND contact_id IS NOT NULL',[meetingId,user.id])).n%Math.max(contacts.length,1)];if(!person)throw Error('No participants');const prompt=`Meeting: ${m.title}. Empire: ${w.name}. Participants: ${contacts.map(c=>`${c.name} (${c.title}; agenda: ${c.agenda})`).join('; ')}. Prior statements: ${previous.reverse().map(t=>`${t.speaker}: ${t.message}`).join(' | ')}. Chairman: ${text}. As ${person.name}, respond with a distinctive professional point of view. When relevant, respectfully contradict another speaker and propose a concrete next step. Speak in first person, no role prefix.`;const reply=await ask('You are a realistic fictional board executive in a live, contentious, high-stakes leadership meeting. Stay in character; do not invent real-world actions.',prompt,{fallback:`Chairman, I would challenge one assumption here. ${person.agenda}. We need a clear owner, financial boundary and deadline before calling this resolved.`});const turn=await one('INSERT INTO meeting_turns(id,user_id,meeting_id,contact_id,speaker,message) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[uid(),user.id,m.id,person.id,person.name,reply]);return {turn};}
