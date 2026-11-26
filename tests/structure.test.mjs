@@ -57,13 +57,15 @@ test('the Activity timeline is connected to the phone and its recorded sources',
   for(const source of ['state.events','state.messages','state.calls','state.meetings','state.economy?.journal','state.operations?.auditLog','state.worldConversationMessages'])assert.ok(feed.includes(source),source);
 });
 
-test('workflow entrypoints keep Node-only work inside stable steps and pin the fixed SDK',()=>{
+test('Node-only database, push and token work is isolated in durable step functions',()=>{
   const worldWorkflow=read('workflows/world-engine.js');
   const callWorkflow=read('workflows/scheduled-call.js');
+  const worldEngine=read('lib/world-engine.mjs');
+  const executiveActions=read('lib/executive-actions.mjs');
   const packageJson=JSON.parse(read('package.json'));
   assert.equal(packageJson.dependencies.workflow,'5.8.0');
-  assert.match(worldWorkflow,/async function runTick[\s\S]*?"use step"/);
-  assert.match(callWorkflow,/async function deliver[\s\S]*?"use step"/);
-  assert.match(worldWorkflow,/import \{tick\}/);
+  assert.match(worldWorkflow,/import \{runWorldEngineTick\}/);
   assert.match(callWorkflow,/import \{completeScheduledCall\}/);
+  assert.match(worldEngine,/export async function runWorldEngineTick[\s\S]*?"use step"/);
+  assert.match(executiveActions,/export async function completeScheduledCall[\s\S]*?"use step"/);
 });
