@@ -11,6 +11,7 @@ test('character memory preserves epistemic status and sensitivity',()=>{
  assert.equal(result.memories[0].sensitivity,'confidential');
  assert.equal(parseMemoryExtraction({memories:[{memoryType:'fact',epistemicStatus:'confirmed',sensitivity:'internal',content:'Invalid type',confidence:1,importance:5}]}),null);
  assert.deepEqual(parseMemoryExtraction({memories:[]}),{memories:[]});
+ assert.equal(parseMemoryExtraction({memories:[{memoryType:'observation',epistemicStatus:'confirmed',sensitivity:'restricted',content:'API key: sk-123456789012345678901234567890',confidence:1,importance:5}]}),null);
 });
 
 test('independent goals require valid targets and recorded evidence for progress',()=>{
