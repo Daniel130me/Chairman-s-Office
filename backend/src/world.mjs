@@ -93,9 +93,10 @@ export async function message(user,contactId,body,channel='chat',sourceCallId=nu
   const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);
   if(!c||!w)throw Error('Contact unavailable');
 
-  if(sourceCallId&&!await one("SELECT id FROM calls WHERE id=$1 AND user_id=$2 AND world_id=$3 AND contact_id=$4 AND status='missed'",[sourceCallId,user.id,w.id,c.id]))throw Error('Call unavailable');
+  if(sourceCallId&&!await one("SELECT id FROM calls WHERE id=$1 AND user_id=$2 AND world_id=$3 AND contact_id=$4 AND status IN ('missed','declined')",[sourceCallId,user.id,w.id,c.id]))throw Error('Call unavailable');
   const outgoingId=uid();
   await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,source_call_id,subject) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[outgoingId,user.id,w.id,c.id,'outgoing',sourceCallId?'missed-call':channel,body,sourceCallId,mailSubject]);
+  if(sourceCallId&&c.availability&&c.availability!=='available')return {reply:null,delivery:'saved-no-reply'};
   const history=(await sql('SELECT direction,body FROM messages WHERE user_id=$1 AND contact_id=$2 ORDER BY created_at DESC LIMIT 12',[user.id,c.id])).reverse();
   const intent=parseCallIntent(body);
   let reply;
