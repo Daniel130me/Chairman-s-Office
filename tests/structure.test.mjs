@@ -24,7 +24,7 @@ test('voice calls use the saved executive identity and an in-world action tool',
 test('delayed callbacks use durable workflows and prompt incoming-call polling',()=>{
   assert.match(read('workflows/scheduled-call.js'),/await sleep/);
   assert.match(read('lib/executive-actions.mjs'),/completeScheduledCall/);
-  assert.match(read('lib/world-engine.mjs'),/export async function deliverInvitePush/);
+  assert.match(read('lib/push.mjs'),/export async function deliverInvitePush/);
   assert.match(read('app/api/invites/pending/route.js'),/pendingInvites/);
   assert.match(read('frontend/src/App.jsx'),/api\('\/invites\/pending'\)/);
 });
