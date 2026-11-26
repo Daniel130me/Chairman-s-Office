@@ -102,7 +102,6 @@ async function startVapi(data,c){
       messages:[{type:'request-start',content:'One moment, Chairman. I am arranging that call.',blocking:false}]
     };
     const overrides={
-      name:c.name,
       firstMessage:'Good day, Chairman. '+c.name+' speaking.',
       variableValues:{
         character_name:c.name,
