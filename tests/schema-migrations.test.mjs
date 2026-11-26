@@ -42,3 +42,5 @@ test('asynchronous boardroom rounds have durable status and response tracking',(
  assert.match(sql,/meeting_rounds_one_active/);
  assert.match(sql,/responses_saved/);
 });
+
+test('meeting turns are linked to one durable round and unique per participant',()=>{assert.match(sql,/meeting_turns ADD COLUMN IF NOT EXISTS round_id/);assert.match(sql,/meeting_turns_round_contact_unique/);});
