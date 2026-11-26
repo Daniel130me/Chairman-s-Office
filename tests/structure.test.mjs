@@ -33,3 +33,26 @@ test('scheduled call actions have database-level idempotency protection',()=>{
   assert.match(read('lib/migrate.mjs'),/scheduler_jobs_action_key_unique/);
   assert.match(read('lib/executive-actions.mjs'),/ON CONFLICT DO NOTHING/);
 });
+
+test('direct messages and group conversations keep separate state keys',()=>{
+  const communications=read('lib/autonomous-communications.mjs');
+  const app=read('frontend/src/App.jsx');
+  assert.match(communications,/return \{worldConversations:conversations,worldConversationMessages\}/);
+  assert.match(app,/state\.worldConversations/);
+  assert.match(app,/state\.worldConversationMessages/);
+});
+test('legacy null engine-lock timestamps do not block world ticks',()=>{
+  const engine=read('lib/world-engine.mjs');
+  const migration=read('lib/migrate.mjs');
+  assert.match(engine,/COALESCE\(lease_until/);
+  assert.match(engine,/COALESCE\(last_tick/);
+  assert.match(engine,/INSERT INTO engine_control/);
+  assert.match(migration,/UPDATE engine_control SET last_tick='-infinity' WHERE last_tick IS NULL/);
+});
+test('the Activity timeline is connected to the phone and its recorded sources',()=>{
+  const app=read('frontend/src/App.jsx');
+  const feed=read('frontend/src/activity-feed.js');
+  assert.match(app,/buildActivityFeed/);
+  assert.match(app,/View full Activity timeline/);
+  for(const source of ['state.events','state.messages','state.calls','state.meetings','state.economy?.journal','state.operations?.auditLog','state.worldConversationMessages'])assert.ok(feed.includes(source),source);
+});

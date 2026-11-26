@@ -3,6 +3,7 @@ import {Phone,PhoneOff,MessageCircle,Users,CalendarDays,BriefcaseBusiness,Landma
 import Vapi from '@vapi-ai/web';
 import { authClient } from '../../lib/auth/client.js';
 import{api,usd,shortDate,shortTime,toUint8}from './api.js';import{playRing,stopRing,clickTone}from './sound.js';
+import {buildActivityFeed} from './activity-feed.js';
 const icons={phone:Phone,messages:MessageCircle,contacts:Users,calendar:CalendarDays,board:BriefcaseBusiness,finance:Landmark,documents:FileText,deals:Scale,settings:SettingsIcon,intelligence:Globe2,news:Newspaper,assistant:Headphones,companies:Building2,employees:Users,activity:ClipboardList,operations:BriefcaseBusiness,investigations:ShieldCheck,approvals:Check,family:HandCoins,travel:Plane,security:ShieldCheck,giving:HeartHandshake,inventory:Boxes,loans:Landmark,acquisitions:TrendingUp,mail:MailIcon};
 const apps=[['phone','Phone','#16b662'],['messages','Messages','#2687ee'],['contacts','Contacts','#ed9070'],['calendar','Calendar','#f5f6f9'],['board','Boardroom','#615ac9'],['finance','Finance','#129ba0'],['companies','Portfolio','#3c79db'],['employees','Employees','#bb7656'],['activity','Activity','#55788e'],['operations','Operations','#287e82'],['investigations','Investigations','#b77c45'],['approvals','Approvals','#3577bb'],['family','Family Office','#4b8c74'],['travel','Travel & Lifestyle','#467e9e'],['security','Security','#b45a55'],['giving','Philanthropy','#4d8d79'],['inventory','Inventory','#9b7545'],['loans','Loans','#557b9e'],['acquisitions','Investments','#3d8878'],['news','News','#567fbd'],['mail','Mail','#357fbe'],['documents','Documents','#e7b452'],['deals','Deals','#ad84d4'],['intelligence','Intelligence','#705ac6'],['assistant','Chief of Staff','#d8aa68'],['settings','Settings','#8490a1']];
 const dayLabel=d=>new Date(d).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
@@ -197,7 +198,15 @@ return <div className={'phone-environment '+(world.settings?.theme==='light'?'li
 {page==='finance'&&<Finance state={world} onBack={back} onChange={reload} notify={notify}/>}
 {page==='companies'&&<Portfolio state={world} onBack={back}/>}
 {page==='employees'&&<Employees state={world} onBack={back} onChange={reload} notify={notify}/>}
-{page==='activity'&&<Activity state={world} onBack={back} targetEventId={targetEventId}/>} 
+{page==='activity'&&<Activity state={world} user={user} onBack={back} targetEventId={targetEventId} onOpen={item=>{
+ if(item.threadId){const thread=world.threads.find(t=>t.id===item.threadId);if(thread){go('matter',thread);return;}}
+ if(item.kind==='group-message'&&item.record?.conversation_id){const conversation=(world.worldConversations||[]).find(c=>c.id===item.record.conversation_id);if(conversation){go('world-conversation',conversation);return;}}
+ if(item.target==='messages'||item.target==='mail'){const contact=world.contacts.find(c=>c.id===item.contactId);if(contact){go(item.target==='mail'?'mail-thread':'conversation',contact);}else go(item.target);return;}
+ if(item.target==='phone'&&item.contactId){const contact=world.contacts.find(c=>c.id===item.contactId);if(contact)go('contact',contact);else go('phone');return;}
+ if(item.target==='board'){const meeting=world.meetings.find(m=>m.id===item.meetingId||m.id===item.record?.id);if(meeting)go('meeting',meeting);else go('board');return;}
+ if(item.target==='documents'&&item.record?.id){const document=world.documents.find(d=>d.id===item.record.id);if(document)go('document',document);else go('documents');return;}
+ go(item.target||'activity',item.record||null);
+}}/>} 
 {page==='operations'&&<Operations state={world} onBack={back} onChange={reload} notify={notify}/>}
 {page==='investigations'&&<Investigations state={world} onBack={back} onChange={reload} notify={notify}/>}
 {page==='approvals'&&<Approvals state={world} onBack={back} onChange={reload} notify={notify}/>}
@@ -218,7 +227,7 @@ return <div className={'phone-environment '+(world.settings?.theme==='light'?'li
 </div>}
 <div className="navigation-bar"><button aria-label="Recent apps" onClick={()=>setDrawer(v=>!v)}><span className="nav-recents"/></button><button aria-label="Home" onClick={home}><span className="nav-home"/></button><button aria-label="Back" onClick={back}><ChevronLeft size={22}/></button></div>
 </>}
-{shade&&<div className="shade" onClick={()=>setShade(false)}><div className="shade-top"><span>{dayLabel(clock)}</span><button onClick={e=>{e.stopPropagation();setShade(false);go('settings')}}><SettingsIcon size={21}/></button></div><div className="quick-grid"><div><Wifi/> Wi-Fi</div><div><Volume2/> Sound</div><div><Moon/> Focus</div><div><Bell/> Alerts</div></div><h3>Notifications</h3>{pending.length?pending.map(i=><div className="notification-item" key={i.id}><PhoneCall size={19}/><div><strong>{i.subject}</strong><p>{i.preview}</p></div></div>):<p className="shade-empty">You're all caught up.</p>}</div>}
+{shade&&<div className="shade" onClick={()=>setShade(false)}><div className="shade-top"><span>{dayLabel(clock)}</span><button onClick={e=>{e.stopPropagation();setShade(false);go('settings')}}><SettingsIcon size={21}/></button></div><div className="quick-grid"><div><Wifi/> Wi-Fi</div><div><Volume2/> Sound</div><div><Moon/> Focus</div><div><Bell/> Alerts</div></div><div className="shade-activity-link"><button onClick={e=>{e.stopPropagation();setShade(false);go('activity')}}><ClipboardList size={18}/> View full Activity timeline <ChevronRight size={17}/></button></div><h3>Notifications</h3>{pending.length?pending.map(i=><div className="notification-item" key={i.id}><PhoneCall size={19}/><div><strong>{i.subject}</strong><p>{i.preview}</p></div></div>):<p className="shade-empty">You're all caught up.</p>}</div>}
 {drawer&&<div className="app-drawer"><div className="drawer-handle" onClick={()=>setDrawer(false)}/><h2>Apps</h2><div className="drawer-grid">{apps.map(a=><IconTile key={a[0]} id={a[0]} color={a[2]} label={a[0]==='assistant'?chiefName:undefined} onClick={()=>go(a[0])}/>)}</div></div>}
 {incoming&&!call&&<div className="call-overlay incoming"><div className="call-top"><small>INCOMING EXECUTIVE CALL</small><span className="call-network">Chairman's Office · Secure line</span></div><div className="caller-ident"><div className="caller-rings"><Avatar name={currentContact(incoming.contact_id)?.name||'Executive'} size={112}/></div><h2>{currentContact(incoming.contact_id)?.name}</h2><p>{currentContact(incoming.contact_id)?.title}</p><small>{currentContact(incoming.contact_id)?.company}</small><div className="call-reason">{incoming.preview}</div></div><div className="call-actions"><button className="call-decline" onClick={decline}><PhoneOff/><span>Decline</span></button><button className="call-accept" onClick={answer}><Phone/><span>Answer</span></button></div></div>}
 {call&&<div className="call-overlay active-call"><div className="call-top"><small>{call.live?'CONNECTED':'EXECUTIVE LINE'}</small><span>{call.live?'Live voice conversation':'Connect using Vapi voice credentials'}</span></div><div className="caller-ident"><Avatar name={call.contact.name} size={108}/><h2>{call.contact.name}</h2><p>{call.contact.title}</p><small>{call.contact.company}</small></div><div className="call-transcripts">{transcript.slice(-3).map((x,i)=><p key={i}><b>{x.role}:</b> {x.text}</p>)}</div><div className="incall-controls"><button onClick={()=>{vapiRef.current?.setMuted(!muted);setMuted(!muted)}}>{muted?<MicOff/>:<Mic/>}<span>Mute</span></button><button onClick={()=>{setSpeaker(!speaker);notify('Audio output is controlled by your device.')}}>{speaker?<Volume2/>:<VolumeX/>}<span>Speaker</span></button><button onClick={()=>notify('Call transcript is saved securely when the call ends.')}><ClipboardList/><span>Notes</span></button></div><button className="hangup" onClick={hangup}><PhoneOff size={27}/></button></div>}
@@ -458,7 +467,98 @@ function News({state,onBack}){
  const items=(state.realWorldNews||[]).filter(n=>(n.title+' '+n.domain+' '+(n.source_country||'')).toLowerCase().includes(query.toLowerCase()));
  return <><AppHeader title="News" back={onBack} subtitle="External reporting connected to your business world"/><div className="search-field"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search headlines and publishers"/></div><div className="content-section">{items.map(item=><article className="detail-section" key={item.id}><div className="row-head"><b>{item.domain}</b><small>{item.published_at?shortDate(item.published_at):'Publication date unavailable'}</small></div><h3>{item.title}</h3><p className="subtle">{[item.source_country,item.language].filter(Boolean).join(' · ')||'External source'} · Retrieved {shortDate(item.retrieved_at)}</p><a href={item.url} target="_blank" rel="noopener noreferrer">Read original report <ArrowUpRight size={15}/></a></article>)}{!items.length&&<Empty title="No external reports yet" description="Sourced news appears after the world engine refreshes its real-world feed." icon={Newspaper}/>}</div><div className="info-note">News headlines are third-party reporting, not independently verified facts. Review the original source before making business decisions. Data provider: GDELT Project.</div></>;
 }
-function Activity({state,onBack,targetEventId}){useEffect(()=>{if(targetEventId)document.getElementById('activity-'+targetEventId)?.scrollIntoView({behavior:'smooth',block:'center'});},[targetEventId]);const names=new Map((state.contacts||[]).map(c=>[c.id,c.name]));const items=[...(state.events||[]).map(e=>({...e,source:'World event'})),...((state.operations?.auditLog)||[]).map(a=>({id:'audit-'+a.id,created_at:a.created_at,kind:'audit',title:a.action+' · '+a.entity_type,body:(a.actor||'System')+' · '+(a.reason||'Recorded action'),source:'Audit trail'})),...((state.messages)||[]).map(m=>({id:'message-'+m.id,created_at:m.created_at,kind:'message',title:(m.direction==='incoming'?'Message from ':'Message to ')+(names.get(m.contact_id)||'Contact'),body:m.body,source:'Messages'})),...((state.calls)||[]).map(c=>({id:'call-'+c.id,created_at:c.started_at||c.created_at,kind:'call',title:(c.direction||'')+' call · '+(names.get(c.contact_id)||'Contact'),body:c.status||c.reason||'Call record',source:'Phone'})),...((state.economy?.journal)||[]).map(j=>({id:'ledger-'+j.id,created_at:j.effective_at,kind:'financial-transaction',title:j.company_name+' · '+j.kind,body:j.description+' · USD '+j.amount+' · '+j.actor,source:'Company ledger'})),...((state.actionRequests)||[]).map(a=>({id:'approval-'+a.id,created_at:a.created_at,kind:'approval',title:a.title,body:a.status+' · '+a.reason,source:'Approvals'}))].filter(x=>x.created_at).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));return <><AppHeader title="Activity" back={onBack} subtitle="Unified history · events · decisions · calls · money"/><div className="content-section"><div className="info-note">World events, audit records, messages, calls, ledger entries and approval requests are shown together. Sensitive or confidential knowledge remains subject to character permissions.</div>{items.length?items.map(e=><div id={'activity-'+e.id} className="detail-section" style={e.id===targetEventId?{border:'2px solid #3b82f6',borderRadius:12}:undefined} key={e.id}><b>{e.title}</b><p className="subtle">{shortDate(e.created_at)} · {shortTime(e.created_at)} · {e.source||e.kind}</p><p>{e.body}</p></div>):<Empty title="No recorded activity"/>}</div></>}
+function Activity({state,user,onBack,targetEventId,onOpen}){
+ const [query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[period,setPeriod]=useState('all');
+ const [catchUp,setCatchUp]=useState({ready:false,lastSeenAt:null,firstVisit:true});
+ const storageKey='chairmans-office-activity-last-seen:'+(user?.id||state.world?.id||'guest');
+ useEffect(()=>{
+  let previous=null;
+  try{previous=window.localStorage.getItem(storageKey);window.localStorage.setItem(storageKey,new Date().toISOString());}catch{}
+  setCatchUp({ready:true,lastSeenAt:previous,firstVisit:!previous});
+ },[storageKey]);
+ const items=useMemo(()=>buildActivityFeed(state,user),[state,user]);
+ useEffect(()=>{if(targetEventId){const target=document.getElementById('activity-'+targetEventId);target?.scrollIntoView({behavior:'smooth',block:'center'});}},[targetEventId,items.length]);
+ const sinceLastVisit=items.filter(item=>{const time=new Date(item.timestamp).getTime();return time<=Date.now()&&(!catchUp.lastSeenAt||time>new Date(catchUp.lastSeenAt).getTime());});
+ const newMessages=sinceLastVisit.filter(item=>item.category==='communication').length;
+ const needsAttention=sinceLastVisit.filter(item=>item.requiresAttention).length;
+ const filters=[
+  ['all','All activity'],['attention','Needs attention'],['you','You were involved'],['away','While you were away'],
+  ['communication','Calls & messages'],['meetings','Meetings'],['business-money','Business & money'],
+  ['people','People'],['security','Security'],['personal','Personal'],['intelligence','Intelligence'],['documents','Documents']
+ ];
+ const filtered=useMemo(()=>{
+  const needle=query.trim().toLowerCase(),now=Date.now();
+  return items.filter(item=>{
+   if(filter==='attention'&&!item.requiresAttention)return false;
+   if(filter==='you'&&!['you','addressed'].includes(item.participation))return false;
+   if(filter==='away'&&item.participation!=='away')return false;
+   if(filter==='business-money'&&!['business','finance'].includes(item.category))return false;
+   if(!['all','attention','you','away','business-money'].includes(filter)&&item.category!==filter)return false;
+   const time=new Date(item.timestamp).getTime(),age=now-time;
+   if(period==='today'&&new Date(item.timestamp).toDateString()!==new Date().toDateString())return false;
+   if(period==='7d'&&Math.abs(age)>7*24*60*60*1000)return false;
+   if(period==='30d'&&Math.abs(age)>30*24*60*60*1000)return false;
+   if(needle&&!([item.title,item.body,item.actor,item.person,item.company,item.source,item.status].join(' ').toLowerCase().includes(needle)))return false;
+   return true;
+  });
+ },[items,filter,period,query]);
+ const grouped=useMemo(()=>{
+  const groups=new Map();
+  for(const item of filtered){
+   const date=new Date(item.timestamp),today=new Date(),yesterday=new Date();
+   yesterday.setDate(yesterday.getDate()-1);
+   const label=date.toDateString()===today.toDateString()?'Today':date.toDateString()===yesterday.toDateString()?'Yesterday':date.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:date.getFullYear()===today.getFullYear()?undefined:'numeric'});
+   const group=groups.get(label)||[];
+   group.push(item);groups.set(label,group);
+  }
+  return [...groups.entries()].map(([label,entries])=>({label,items:entries}));
+ },[filtered]);
+ const icons={communication:PhoneCall,meetings:CalendarDays,finance:Landmark,people:Users,security:ShieldCheck,personal:HandCoins,intelligence:Globe2,documents:FileText,approvals:Check,business:BriefcaseBusiness};
+ const participationLabel=item=>item.participation==='you'?'You participated':item.participation==='addressed'?'You were contacted':'While you were away';
+ return <><AppHeader title="Activity" back={onBack} subtitle="Your executive world · complete recorded timeline"/>
+  <div className="activity-screen">
+   <section className="activity-welcome">
+    <div className="activity-welcome-head">
+     <div><span className="activity-eyebrow">YOUR EXECUTIVE BRIEFING</span><h2>{user?.name?'Welcome back, '+user.name.split(' ')[0]:'Welcome back, Chairman'}</h2><p>{catchUp.firstVisit?'Your first visit to Activity. Here is the recorded history available in your office.':sinceLastVisit.length?'Here is what happened since your last visit.':'No new activity since your last visit. Your full timeline is below.'}</p></div>
+     <span className="activity-welcome-icon"><Clock3 size={25}/></span>
+    </div>
+    <div className="activity-stats">
+     <div className="activity-stat"><strong>{catchUp.ready?sinceLastVisit.length:'—'}</strong><small>{catchUp.firstVisit?'Recorded events':'Events since last visit'}</small></div>
+     <div className="activity-stat"><strong>{catchUp.ready?newMessages:'—'}</strong><small>Calls & messages</small></div>
+     <div className="activity-stat"><strong>{catchUp.ready?needsAttention:'—'}</strong><small>Need attention</small></div>
+    </div>
+    <div className="activity-welcome-foot"><span>Meetings · decisions · people · money · opportunities · risks</span>{catchUp.lastSeenAt&&<span>Last visit {shortDate(catchUp.lastSeenAt)}</span>}</div>
+   </section>
+   <div className="activity-toolbar">
+    <label className="activity-search"><Search size={18}/><input aria-label="Search activity" placeholder="Search people, companies, decisions..." value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button type="button" onClick={()=>setQuery('')} aria-label="Clear search"><X size={16}/></button>}</label>
+    <select className="activity-period" aria-label="Activity date range" value={period} onChange={e=>setPeriod(e.target.value)}><option value="all">All time</option><option value="today">Today</option><option value="7d">7 days</option><option value="30d">30 days</option></select>
+   </div>
+   <div className="activity-filters" aria-label="Filter activity">
+    {filters.map(([id,label])=><button type="button" key={id} className={'activity-filter '+(filter===id?'active':'')} onClick={()=>setFilter(id)}>{label}</button>)}
+   </div>
+   <div className="activity-results-heading"><b>{filter==='all'?'All recorded activity':filters.find(x=>x[0]===filter)?.[1]}</b><span>{filtered.length} {filtered.length===1?'record':'records'}</span></div>
+   {grouped.length? <div className="activity-timeline">
+    {grouped.map(group=><section className="activity-day" key={group.label}>
+     <h3>{group.label}<span>{group.items.length}</span></h3>
+     <div className="activity-list">
+      {group.items.map(item=>{const Icon=icons[item.category]||ClipboardList;return <div className="activity-event" id={'activity-'+item.id} key={item.id}>
+       <div className="activity-event-rail"><span className={'activity-event-icon '+item.category}><Icon size={16}/></span><span className="activity-event-line"/></div>
+       <button type="button" className="activity-event-card" onClick={()=>onOpen?.(item)} aria-label={'Open '+item.title}>
+        <div className="activity-event-top"><span>{item.source}</span><time>{shortTime(item.timestamp)}</time></div>
+        <div className="activity-event-heading"><strong>{item.title}</strong>{item.requiresAttention&&<span className="activity-attention">Action needed</span>}</div>
+        {item.body&&<p>{item.body}</p>}
+        <div className="activity-event-meta"><span className={'activity-pill '+item.participation}>{participationLabel(item)}</span>{item.company&&<span className="activity-pill">{item.company}</span>}{item.status&&<span className="activity-pill">{item.status}</span>}</div>
+        <span className="activity-open-hint">Open related app <ChevronRight size={13}/></span>
+       </button>
+      </div>})}
+     </div>
+    </section>)}
+   </div>:<Empty title={items.length?'No matching activity':'No recorded activity'} description={items.length?'Try another filter, date range or search term.':'Calls, conversations, meetings, decisions and business developments will appear here.'}/>}
+   <p className="activity-footnote">The timeline is built from recorded office events and business records. It does not invent activity when no record exists.</p>
+  </div>
+ </>;
+}
+
 function Employees({state,onBack,onChange,notify}){
  const [company,setCompany]=useState(state.companies[0]?.id||''),[name,setName]=useState(''),[title,setTitle]=useState(''),[salary,setSalary]=useState(''),[key,setKey]=useState(()=>crypto.randomUUID()),[busy,setBusy]=useState(false),[selected,setSelected]=useState(null),[reason,setReason]=useState('');
  async function hire(e){e.preventDefault();if(busy)return;setBusy(true);try{await api('/employees',{method:'POST',body:{companyId:company,name,title,salary,operationKey:key}});setName('');setTitle('');setSalary('');setKey(crypto.randomUUID());await onChange();notify('Employee hired and added to Contacts.');}catch(e){notify(e.message)}finally{setBusy(false)}}

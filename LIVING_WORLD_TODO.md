@@ -102,7 +102,7 @@ The following systems were added after the original backlog was committed. "Code
 - [ ] Travel & Lifestyle: personal/business trips, flight/hotel/ground/experience/private-aviation/security booking records; booking confirmation posts to the appropriate personal or company ledger.
 - [ ] Security & Risk: incident register, categories, severity, assignments, evidence, findings, false-alarm and resolution.
 - [ ] Philanthropy: personal/company grant proposal, approval and disbursement with corresponding ledger entries.
-- [ ] Unified Activity view combining world events, audit records, messages, calls, company ledger entries and approval requests.
+- [ ] Unified Activity & Catch-up timeline: a Samsung-style chronological history across world events, audit records, direct and group messages, calls, voicemail records, meetings and transcripts, decisions, approvals, documents, ledger transactions, payroll, contracts, procurement, inventory movements, people, travel, security, philanthropy, investments and external intelligence. Include a since-last-visit briefing, participation/absence labels, action-needed flags, search, date/category filters and deep links into the relevant phone apps. The timeline must be based on persisted records and must not invent events.
 - [ ] Authenticated PWA launch starts the durable world workflow with database-based duplicate-run protection.
 - [ ] Approval-gated action proposals from internal executive text conversations; supported actions are persisted for Chairman approval rather than executed directly by the model.
 - [ ] Valid P-256 VAPID key pair configured on the Living World preview environment; service worker, manifest and offline shell served by preview.
