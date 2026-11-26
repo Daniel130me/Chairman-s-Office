@@ -203,6 +203,7 @@ export async function meetingSpeak(user,meetingId,text){
   const chairmanTurn=(await q('INSERT INTO meeting_turns(id,user_id,meeting_id,speaker,message) VALUES($1,$2,$3,$4,$5) RETURNING *',[uid(),user.id,m.id,user.name,text]))[0];
   await q("UPDATE meetings SET status='in_progress' WHERE id=$1 AND user_id=$2",[m.id,user.id]);
   const round=(await q('INSERT INTO meeting_rounds(id,user_id,world_id,meeting_id,chairman_turn_id,expected_responses) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[uid(),user.id,w.id,m.id,chairmanTurn.id,contacts.length]))[0];
+  await q('UPDATE meeting_turns SET round_id=$1 WHERE id=$2 AND user_id=$3',[round.id,chairmanTurn.id,user.id]);
   return {roundId:round.id,chairmanTurn,expectedResponses:round.expected_responses,status:round.status};
  });
 }
@@ -218,7 +219,7 @@ export async function runMeetingRound(roundId,userId){
   const contacts=await sql('SELECT * FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],id)',[userId,m.attendees]);
   const prior=await sql('SELECT speaker,message FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND created_at<=(SELECT created_at FROM meeting_turns WHERE id=$3 AND user_id=$2) ORDER BY created_at DESC LIMIT 24',[m.id,userId,round.chairman_turn_id]);
   const history=prior.reverse();
-  const existing=await sql('SELECT contact_id FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND contact_id IS NOT NULL AND created_at>(SELECT created_at FROM meeting_turns WHERE id=$3 AND user_id=$2)',[m.id,userId,round.chairman_turn_id]);
+  const existing=await sql('SELECT contact_id FROM meeting_turns WHERE round_id=$1 AND user_id=$2 AND contact_id IS NOT NULL',[roundId,userId]);
   const completed=new Set(existing.map(x=>x.contact_id));
   let saved=existing.length;
   for(const person of contacts){
