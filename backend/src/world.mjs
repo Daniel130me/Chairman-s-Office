@@ -25,14 +25,15 @@ async function characterPrompt(user,contact,history,world){
     'Speak naturally, distinctly and credibly like a senior professional. You may disagree, ask questions, negotiate or hold back information when consistent with your character. Maintain continuity, specificity and consequences. Reply in plain conversational language, usually 1–4 sentences.'
   ].join(' ');
 }
-export async function message(user,contactId,body,channel='chat'){
+export async function message(user,contactId,body,channel='chat',sourceCallId=null){
   body=String(body||'').trim().slice(0,3500);
   if(!body)throw Error('Write a message.');
   const c=await one('SELECT * FROM contacts WHERE id=$1 AND user_id=$2',[contactId,user.id]);
   const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);
   if(!c||!w)throw Error('Contact unavailable');
 
-  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,w.id,c.id,'outgoing',channel,body]);
+  if(sourceCallId&&!await one("SELECT id FROM calls WHERE id=$1 AND user_id=$2 AND world_id=$3 AND contact_id=$4 AND status='missed'",[sourceCallId,user.id,w.id,c.id]))throw Error('Call unavailable');
+  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,source_call_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[uid(),user.id,w.id,c.id,'outgoing',sourceCallId?'missed-call':channel,body,sourceCallId]);
   const history=(await sql('SELECT direction,body FROM messages WHERE user_id=$1 AND contact_id=$2 ORDER BY created_at DESC LIMIT 12',[user.id,c.id])).reverse();
   const intent=parseCallIntent(body);
   let reply;
@@ -66,12 +67,13 @@ export async function message(user,contactId,body,channel='chat'){
     }
   }else{
     reply=await ask(
-      await characterPrompt(user,c,history,w),
+      (await characterPrompt(user,c,history,w))+' Previous calls: '+(await sql("SELECT summary FROM calls WHERE user_id=$1 AND contact_id=$2 AND status='completed' ORDER BY ended_at DESC LIMIT 3",[user.id,c.id])).map(x=>x.summary).join(' | ').slice(0,3500),
       'The Chairman says: '+body+'\nRespond as '+c.name+'.',
-      {fallback:'I hear you, Chairman. On '+c.agenda.toLowerCase()+', I would suggest we make the trade-offs explicit before we commit. What outcome matters most to you?'}
+      {fallback:null}
     );
   }
 
+  if(!reply)return {reply:null,delivery:'saved-no-reply'};
   await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,w.id,c.id,'incoming',channel,reply]);
   await sql('UPDATE contacts SET last_contact_at=now(),trust=least(100,trust+1) WHERE id=$1',[c.id]);
   return {reply};
@@ -82,6 +84,10 @@ export async function startCall(user,contactId,inviteId=null){
   const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);
   if(!c||!w)throw Error('Contact unavailable');
 
+  if(!inviteId&&c.availability&&c.availability!=='available'){
+    const missed=await one("INSERT INTO calls(id,user_id,world_id,contact_id,status,ended_at,summary) VALUES($1,$2,$3,$4,'missed',now(),$5) RETURNING *",[uid(),user.id,w.id,c.id,'No answer — contact unavailable']);
+    return {call:missed,contact:c,unavailable:true};
+  }
   const call=await transaction(async q=>{
     if(inviteId){
       const rows=await q("UPDATE invites SET status='answered' WHERE id=$1 AND user_id=$2 AND contact_id=$3 AND status='pending' AND due_at<=now() RETURNING id",[inviteId,user.id,c.id]);
@@ -93,12 +99,13 @@ export async function startCall(user,contactId,inviteId=null){
   const history=await sql('SELECT direction,body FROM messages WHERE user_id=$1 AND contact_id=$2 ORDER BY created_at DESC LIMIT 10',[user.id,c.id]);
   const previous=await sql("SELECT summary FROM calls WHERE user_id=$1 AND contact_id=$2 AND status='completed' ORDER BY ended_at DESC LIMIT 3",[user.id,c.id]);
   const colleagues=await sql('SELECT name,title,company FROM contacts WHERE user_id=$1 AND id<>$2 ORDER BY title,name',[user.id,c.id]);
+  const invitation=inviteId?await one('SELECT subject,preview FROM invites WHERE id=$1 AND user_id=$2 AND contact_id=$3',[inviteId,user.id,c.id]):null;
   const actionToken=createVapiActionToken({userId:user.id,callId:call.id,sourceContactId:c.id});
 
   return {
     call,
     contact:c,
-    context:(await characterPrompt(user,c,history.reverse(),w))+' Previous calls: '+previous.map(p=>p.summary).join(' | ').slice(0,3500),
+    context:(await characterPrompt(user,c,history.reverse(),w))+' Previous calls: '+previous.map(p=>p.summary).join(' | ').slice(0,3500)+(invitation?' Incoming call reason: '+invitation.subject+' — '+invitation.preview:''),
     assistantId:c.vapi_assistant_id||process.env.VAPI_ASSISTANT_ID||null,
     actionToken,
     colleagues
