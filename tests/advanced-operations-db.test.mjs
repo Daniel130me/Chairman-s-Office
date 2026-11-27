@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {sql,uid,database} from '../backend/src/db.mjs';
 import {createPurchaseOrder,transitionPurchaseOrder,createContract,transitionContract,createInvoice,payInvoice} from '../lib/operations.mjs';
 import {sellInventory} from '../lib/procurement.mjs';
+import {createRfq,counterRfq,decideRfq,priceQuote} from '../lib/supplier-rfq.mjs';
 import {reconcileWorlds} from '../scripts/reconcile-worlds.mjs';
 import {economySnapshot} from '../lib/economy.mjs';
 import {recordStocktake,returnCustomerSale,returnSupplierLine,reviewSupplier,createObligation,completeObligation,processContractObligations,openDispute,addDisputeEvidence,resolveDispute,advancedOperationsSnapshot} from '../lib/advanced-operations.mjs';
@@ -59,10 +60,30 @@ test('stock, returns, contractual enforcement and settlement reconcile in Postgr
   await transitionPurchaseOrder(u,second.id,{status:'paid',reason:'Net payable settled'});
   const [paid]=await sql('SELECT paid_total,status FROM purchase_orders WHERE id=$1',[second.id]);assert.equal(paid.paid_total,'60.00');assert.equal(paid.status,'paid');
   snapshot=await economySnapshot(u.id);assert.equal(snapshot.financialStatements[0].cash,'970.00');assert.equal(snapshot.financialStatements[0].inventory,'100.00');assert.equal(snapshot.financialStatements[0].payables,'0.00');assert.equal(snapshot.financialStatements[0].balanceCheck,'0.00');
+  const s1=uid(),s2=uid();
+  await sql("INSERT INTO contacts(id,user_id,world_id,name,title,kind,company) VALUES($1,$2,$3,'Sales A','Supplier','supplier','Vendor A'),($4,$2,$3,'Sales B','Supplier','supplier','Vendor B')",[s1,u.id,w,s2]);
+  const tender=await createPurchaseOrder(u,{companyId:c,vendor:'Original supplier',description:'Competitive sourcing',lines:[{sku:'S3',name:'Third stock',quantity:'10',unitCost:'10'}],operationKey:uid()});
+  const request={supplierIds:[s1,s2],reason:'Compare offers',operationKey:uid()};
+  const rfq=await createRfq(u,tender.id,request);assert.equal((await createRfq(u,tender.id,request)).id,rfq.id);
+  await assert.rejects(()=>transitionPurchaseOrder(u,tender.id,{status:'approved',reason:'Premature'}),/RFQ/);
+  const rounds=await sql('SELECT * FROM supplier_rfq_rounds WHERE rfq_id=$1 ORDER BY id',[rfq.id]);assert.equal(rounds.length,2);
+  const chosen=rounds.find(r=>r.supplier_contact_id===s1);
+  await sql("UPDATE supplier_rfq_rounds SET status='quoted',response=$1 WHERE id=$2",[JSON.stringify({decision:'counter',markupBasisPoints:-500,reason:'Volume discount',...priceQuote(rfq.baseline.lines,-500)}),chosen.id]);
+  const next=await counterRfq(u,chosen.id,{markupBasisPoints:-800});
+  assert.equal((await counterRfq(u,chosen.id,{markupBasisPoints:-800})).id,next.id);
+  await assert.rejects(()=>decideRfq(u,rfq.id,{decision:'awarded',roundId:chosen.id,reason:'Stale offer'}),/latest/);
+  await sql("UPDATE supplier_rfq_rounds SET status='quoted',response=$1 WHERE id=$2",[JSON.stringify({decision:'counter',markupBasisPoints:-800,reason:'Accepted counteroffer',...priceQuote(rfq.baseline.lines,-800)}),next.id]);
+  await assert.rejects(()=>decideRfq(other,rfq.id,{decision:'awarded',roundId:next.id,reason:'Unauthorized'}),/unavailable/);
+  const award=await decideRfq(u,rfq.id,{decision:'awarded',roundId:next.id,reason:'Selected best terms'});
+  assert.equal(award.awarded_round_id,next.id);
+  const [updatedOrder]=await sql('SELECT vendor_name,total,status FROM purchase_orders WHERE id=$1',[tender.id]);assert.equal(updatedOrder.total,'92.00');assert.equal(updatedOrder.vendor_name,'Vendor A');assert.equal(updatedOrder.status,'draft');
+  assert.equal((await economySnapshot(u.id)).financialStatements[0].cash,'970.00');
+  await transitionPurchaseOrder(u,tender.id,{status:'approved',reason:'Authorized selected quote'});
   const violations=(await reconcileWorlds()).filter(r=>r.violations);assert.deepEqual(violations,[]);
  }finally{
   await sql('DELETE FROM commercial_disputes WHERE user_id=$1',[u.id]);
   await sql('DELETE FROM inventory_returns WHERE user_id=$1',[u.id]);
+  await sql('DELETE FROM supplier_negotiations WHERE user_id=$1',[u.id]);
   await sql('DELETE FROM users WHERE id=ANY($1::uuid[])',[[u.id,other.id]]);
   await database().end();
  }
