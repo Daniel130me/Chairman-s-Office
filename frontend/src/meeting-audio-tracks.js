@@ -7,12 +7,14 @@ export function createMeetingAudioTracks(microphoneTrack){
  return {monitorTrack:microphoneTrack,sendTrack};
 }
 
-export function waitForIceGathering(peer,timeoutMs=10000){
+export function waitForIceGathering(peer,timeoutMs=10000,signal){
  if(peer.iceGatheringState==='complete')return Promise.resolve();
  return new Promise((resolve,reject)=>{
-  const cleanup=()=>{clearTimeout(timer);peer.removeEventListener('icegatheringstatechange',changed);};
+  const cleanup=()=>{clearTimeout(timer);peer.removeEventListener('icegatheringstatechange',changed);signal?.removeEventListener('abort',aborted);};
   const changed=()=>{if(peer.iceGatheringState==='complete'){cleanup();resolve();}};
+  const aborted=()=>{cleanup();const error=new Error('ICE gathering cancelled.');error.name='AbortError';reject(error);};
   const timer=setTimeout(()=>{cleanup();reject(new Error('Network route discovery timed out.'));},timeoutMs);
-  peer.addEventListener('icegatheringstatechange',changed);changed();
+  signal?.addEventListener('abort',aborted,{once:true});
+  peer.addEventListener('icegatheringstatechange',changed);if(signal?.aborted)aborted();else changed();
  });
 }
