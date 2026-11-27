@@ -148,6 +148,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(nestedExit.closing_statement.transferredLoans.length,2);
   assert.equal(nestedExit.closing_statement.transferredLoans.reduce((n,l)=>n+Number(l.outstanding_principal),0),30);
   assert.ok(Number(nestedExit.closing_statement.transferredLoans.find(l=>l.lender_name==='Nested Bank A').accrued_interest_due)>0);
+  assert.ok(Number(nestedExit.closing_statement.totalAssumedDebt)>30);
   assert.equal(nestedExit.closing_statement.intercompanyFacilities.length,1);
   const [transferredFacility]=await sql('SELECT transferred_at,transferred_to FROM intercompany_facilities WHERE id=$1',[internalFacility.id]);
   assert.ok(transferredFacility.transferred_at);assert.equal(transferredFacility.transferred_to,exit.buyer);
