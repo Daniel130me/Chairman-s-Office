@@ -13,7 +13,7 @@ export default function AdvancedOperations({state,onChange,notify,section='comme
  const select=(k,label,options)=><label>{label}<select required value={form?.[k]||''} onChange={e=>field(k,e.target.value)}><option value="">Choose</option>{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>;
  async function submit(e){
   e.preventDefault();if(!form||busy)return;setBusy(true);
-  const {type,id,...body}=form;
+  const {type,id,...body}=form;delete body.hasInvoice;
   const routes={count:'/inventory/'+id+'/stocktake',customer:'/stock-sales/'+id+'/return',supplier:'/purchase-order-lines/'+id+'/return',review:'/purchase-orders/'+id+'/review',obligation:'/contracts/'+id+'/obligation',complete:'/contract-obligations/'+id+'/complete',dispute:'/contracts/'+id+'/dispute',evidence:'/commercial-disputes/'+id+'/evidence',resolve:'/commercial-disputes/'+id+'/resolve'};
   try{if(type==='obligation')body.dueAt=new Date(body.dueAt).toISOString();await api(routes[type],{method:'POST',body});setForm(null);await load();await onChange();notify('Operations record saved.');}catch(e){notify(e.message);}finally{setBusy(false);}
  }
@@ -26,7 +26,7 @@ export default function AdvancedOperations({state,onChange,notify,section='comme
  {form.type==='count'&&<><p>Expected {form.expectedQuantity}</p>{input('actualQuantity','Actual count','number')}{Number(form.expectedQuantity)===0&&input('unitCost','Supported cost per unit (USD)','number')}</>}
  {['supplier','customer'].includes(form.type)&&<>{input('quantity','Returned quantity','number')}<p>Confirm the fictional cash refund and goods movement. Returns are limited to the original transaction.</p></>}
  {form.type==='review'&&select('quality','Delivery quality',[['accepted','Accepted'],['mixed','Mixed'],['defective','Defective']])}
- {form.type==='obligation'&&<>{input('title','Title')}{input('description','Agreed requirement')}{select('responsibleParty','Responsible party',[['company','Our company'],['counterparty','Counterparty']])}{input('dueAt','Due date and time','datetime-local')}</>}
+ {form.type==='dispute'&&<label>Linked invoice (optional)<select value={form.invoiceId||''} onChange={e=>field('invoiceId',e.target.value)}><option value="">Use milestone invoice if available</option>{(state.operations?.invoices||[]).filter(i=>i.status==='issued'&&i.company_id===contracts.find(c=>c.id===form.id)?.company_id&&i.customer_name.toLowerCase()===contracts.find(c=>c.id===form.id)?.counterparty.toLowerCase()).map(i=><option key={i.id} value={i.id}>{i.invoice_number} · {usd(i.amount)}</option>)}</select></label>}{form.type==='obligation'&&<>{input('title','Title')}{input('description','Agreed requirement')}{select('responsibleParty','Responsible party',[['company','Our company'],['counterparty','Counterparty']])}{input('dueAt','Due date and time','datetime-local')}</>}
  {form.type==='complete'&&select('status','Outcome',[['fulfilled','Fulfilled'],['waived','Authorized waiver']])}
  {form.type==='evidence'&&<>{input('source','Evidence source')}{input('description','Evidence description')}</>}
  {form.type==='resolve'&&<>{select('resolution','Resolution',[['resume','Resume contract and collection'],['settle','Agreed final settlement'],['terminate','Terminate and credit outstanding linked invoice']])}{form.resolution==='settle'&&form.hasInvoice&&input('paid','Confirmed settlement cash (USD)','number')}<p>Record the agreed fictional outcome only after reviewing evidence.</p></>}
