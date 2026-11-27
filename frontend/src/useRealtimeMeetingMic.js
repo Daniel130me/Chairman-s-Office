@@ -84,7 +84,7 @@ export function useRealtimeMeetingMic({meetingId,onStartSpeaking,onTranscript,on
    s.pc.onconnectionstatechange=()=>{if(['failed','closed'].includes(s.pc.connectionState))fail('Streaming microphone disconnected.');};
    const offer=await s.pc.createOffer();await s.pc.setLocalDescription(offer);if(!live())return;
    // The one-shot SDP exchange requires gathered ICE candidates in the offer.
-   await waitForIceGathering(s.pc,10000);
+   await waitForIceGathering(s.pc,10000,s.abort.signal);
    if(!live())return;const localSdp=s.pc.localDescription?.sdp;if(!localSdp)throw Error('Microphone connection offer was unavailable.');
    const response=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{Authorization:'Bearer '+secret.value,'Content-Type':'application/sdp'},body:localSdp,signal:s.abort.signal});
    if(!response.ok)throw Error('Streaming microphone could not connect. Use recorded speech mode.');
