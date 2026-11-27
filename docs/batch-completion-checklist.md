@@ -105,3 +105,6 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Optional automatic bounded executive debate and recorded short interjection style with experimental overlapping playback; existing durable voice/meeting source-of-truth and Chairman floor controls retained. Automated verification and actual provider/device acceptance pending; not full-duplex model-native speech-to-speech.
 
 - [x] Scheduled real-world intelligence refresh wired into the durable world engine; atomic six-hour success / thirty-minute retry claims prevent duplicate provider calls. Latest per-indicator snapshots are now returned to the Intelligence app. Manual refresh is a durable workflow, not a long-running browser request. Settings now exposes engine heartbeat, world freshness, stage failures and recovery activation. Verification pending.
+
+- [x] Evidence-backed contractual standstill/suspension with a review deadline, automatic expiry alert without forced termination, deadline pausing, and evidence-backed resumption. Outstanding obligation and milestone deadlines are extended by the actual suspended duration. Verification pending.
+- [x] External intelligence changes are grouped into one privacy-safe push per refresh rather than notifying separately for every changed indicator. Verification pending.

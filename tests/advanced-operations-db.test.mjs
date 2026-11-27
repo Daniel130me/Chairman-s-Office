@@ -7,7 +7,7 @@ import {reviseDisputePlan,createDisputePlan,payDisputeInstallment,processDispute
 import {createRfq,counterRfq,decideRfq,priceQuote} from '../lib/supplier-rfq.mjs';
 import {reconcileWorlds} from '../scripts/reconcile-worlds.mjs';
 import {economySnapshot} from '../lib/economy.mjs';
-import {recordStocktake,returnCustomerSale,returnSupplierLine,reviewSupplier,createObligation,completeObligation,processContractObligations,openDispute,addDisputeEvidence,createDisputeCure,resolveDispute,advancedOperationsSnapshot} from '../lib/advanced-operations.mjs';
+import {recordStocktake,returnCustomerSale,returnSupplierLine,reviewSupplier,createObligation,completeObligation,processContractObligations,openDispute,addDisputeEvidence,createDisputeCure,suspendDisputedContract,resumeSuspendedContract,processContractSuspensions,resolveDispute,advancedOperationsSnapshot} from '../lib/advanced-operations.mjs';
 test('stock, returns, contractual enforcement and settlement reconcile in PostgreSQL',{skip:process.env.RUN_ADVANCED_OPERATIONS_DB_TESTS!=='1',timeout:60000},async()=>{
  assert.match(process.env.DATABASE_URL||'',/@127\.0\.0\.1:5432\/chairman_ci\?/);
  const u={id:uid(),name:'Operations fixture'},other={id:uid()},w=uid(),c=uid();
@@ -122,6 +122,32 @@ test('stock, returns, contractual enforcement and settlement reconcile in Postgr
   snapshot=await economySnapshot(u.id);assert.equal(snapshot.financialStatements[0].cash,'1035.00');assert.equal(snapshot.financialStatements[0].receivables,'0.00');assert.equal(snapshot.financialStatements[0].balanceCheck,'0.00');
   const [closedPlan]=await sql('SELECT status FROM dispute_payment_plans WHERE id=$1',[plan.id]);assert.equal(closedPlan.status,'completed');
   const [finalInvoice]=await sql('SELECT settlement_paid,settlement_credit FROM business_invoices WHERE id=$1',[agreementInvoice.id]);assert.equal(finalInvoice.settlement_paid,'65.00');assert.equal(finalInvoice.settlement_credit,'35.00');
+  const standstillContract=await createContract(u,{companyId:c,title:'Standstill test contract',counterparty:'Customer C',terms:'Documented service agreement',value:'50',operationKey:uid()});
+  await transitionContract(u,standstillContract.id,{status:'active',reason:'Authorized'});
+  const pausedObligation=await createObligation(u,standstillContract.id,{title:'Complete implementation',description:'Deliver the agreed implementation milestone.',responsibleParty:'company',dueAt:new Date(Date.now()+300000).toISOString(),operationKey:uid()});
+  const standstillDispute=await openDispute(u,standstillContract.id,{reason:'Customer contests the implementation scope',operationKey:uid()});
+  await addDisputeEvidence(u,standstillDispute.id,{source:'Signed scope correspondence',description:'The customer and company have documented the disputed implementation scope.',operationKey:uid()});
+  const standstillBody={reason:'Both parties agree to pause implementation while the scope is reviewed.',evidence:'Written standstill signed by the customer and company representatives.',untilAt:new Date(Date.now()+86400000).toISOString(),confirm:true,operationKey:uid()};
+  await assert.rejects(()=>suspendDisputedContract(other,standstillDispute.id,standstillBody),/unavailable/);
+  const standstill=await suspendDisputedContract(u,standstillDispute.id,standstillBody);
+  assert.equal((await suspendDisputedContract(u,standstillDispute.id,standstillBody)).id,standstill.id);
+  assert.equal((await sql('SELECT status FROM business_contracts WHERE id=$1',[standstillContract.id]))[0].status,'suspended');
+  await assert.rejects(()=>transitionContract(u,standstillContract.id,{status:'terminated',reason:'Bypass standstill controls'}),/transition/);
+  await sql("UPDATE contract_suspensions SET started_at=now()-interval '10 minutes',requested_until=now()-interval '1 minute' WHERE id=$1",[standstill.id]);
+  await sql("UPDATE contract_obligations SET due_at=now()-interval '5 minutes' WHERE id=$1",[pausedObligation.id]);
+  await processContractSuspensions(u.id);
+  assert.equal((await sql('SELECT status FROM contract_suspensions WHERE id=$1',[standstill.id]))[0].status,'expired');
+  await processContractObligations(u.id);
+  assert.equal((await sql('SELECT status FROM contract_obligations WHERE id=$1',[pausedObligation.id]))[0].status,'pending');
+  const resumeBody={reason:'Both parties confirmed the scope review is complete and work may restart.',evidence:'Signed restart instruction from the customer and company.',confirm:true,operationKey:uid()};
+  const lifted=await resumeSuspendedContract(u,standstill.id,resumeBody);
+  assert.equal((await resumeSuspendedContract(u,standstill.id,resumeBody)).id,lifted.id);
+  assert.equal(lifted.status,'resumed');
+  assert.equal((await sql('SELECT status FROM business_contracts WHERE id=$1',[standstillContract.id]))[0].status,'disputed');
+  assert.ok(new Date((await sql('SELECT due_at FROM contract_obligations WHERE id=$1',[pausedObligation.id]))[0].due_at).getTime()>Date.now());
+  const resumedDispute=await resolveDispute(u,standstillDispute.id,{resolution:'resume',reason:'The evidence supports resuming the contract and normal collection.'});
+  assert.equal(resumedDispute.status,'resolved');
+  assert.equal((await sql('SELECT status FROM business_contracts WHERE id=$1',[standstillContract.id]))[0].status,'active');
   const violations=(await reconcileWorlds()).filter(r=>r.violations);assert.deepEqual(violations,[]);
  }finally{
   await sql('DELETE FROM commercial_disputes WHERE user_id=$1',[u.id]);
