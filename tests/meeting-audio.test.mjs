@@ -31,3 +31,9 @@ test('WebRTC ICE gathering fails with a bounded timeout',async()=>{
  await assert.rejects(()=>waitForIceGathering(peer,5),/timed out/);
  assert.equal(listeners.size,0);
 });
+
+test('closing the microphone aborts a pending ICE wait immediately',async()=>{
+ const listeners=new Set(),peer={iceGatheringState:'gathering',addEventListener(_name,fn){listeners.add(fn);},removeEventListener(_name,fn){listeners.delete(fn);}};
+ const controller=new AbortController(),waiting=waitForIceGathering(peer,10000,controller.signal);
+ controller.abort();await assert.rejects(waiting,{name:'AbortError'});assert.equal(listeners.size,0);
+});
