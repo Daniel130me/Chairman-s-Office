@@ -55,3 +55,13 @@ test('acquired identifiable intangible assets and trade payables enter net asset
  assert.deepEqual(accounts('acquired-payable'),['equity','acquired_payables']);
  assert.deepEqual(accounts('acquired-payable-payment'),['acquired_payables','cash']);
 });
+
+import {lossOfControlCalculation} from '../lib/subsidiary-disposal.mjs';
+test('loss of control includes retained interest and derecognizes net assets, goodwill and NCI',()=>{
+ const terms={owned:'65',sold:'45',carrying:'238.34',proceeds:'200',retainedValue:'90',netAssets:'300',goodwill:'50'};
+ const r=lossOfControlCalculation(terms);
+ assert.equal(r.remainingStake,'20.00');assert.equal(r.parentGain,'51.66');assert.equal(r.groupGain,'45.00');assert.equal(r.minority,'105.00');
+ assert.throws(()=>lossOfControlCalculation({...terms,sold:'10'}),/loss-of-control/);
+ assert.throws(()=>lossOfControlCalculation({...terms,sold:'65'}),/retained/);
+ assert.equal(lossOfControlCalculation({...terms,sold:'65',retainedValue:'0'}).remainingStake,'0.00');
+});
