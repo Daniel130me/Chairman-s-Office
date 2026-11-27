@@ -12,7 +12,7 @@ self.addEventListener('fetch',event=>{
  if(event.request.method!=='GET'||url.origin!==self.location.origin)return;
  // Private API, auth, media and HTML are always network-only.
  if(event.request.mode==='navigate'){
-  event.respondWith((async()=>{if(self.navigator.onLine===false)return offline();try{const response=await fetch(event.request);return [502,503,504].includes(response.status)?offline():response;}catch{return offline();}})());return;
+  event.respondWith((async()=>{try{const request=new Request(event.request,{cache:'no-store'});const response=await fetch(request);return [502,503,504].includes(response.status)?offline():response;}catch{return offline();}})());return;
  }
  if(!url.pathname.startsWith('/_next/static/')&&!PUBLIC_SHELL.includes(url.pathname))return;
  event.respondWith(caches.open(CACHE).then(async cache=>{const cached=await cache.match(event.request);if(cached)return cached;const response=await fetch(event.request);if(response.ok&&response.type==='basic'&&!/private|no-store/i.test(response.headers.get('Cache-Control')||''))try{await cache.put(event.request,response.clone());}catch{}return response;}).catch(()=>fetch(event.request)));
