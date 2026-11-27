@@ -1,3 +1,4 @@
+import {pathToFileURL} from 'node:url';
 import {sql,database} from '../backend/src/db.mjs';
 // Read-only, aggregate diagnostics. Never print user IDs, messages or credentials.
 // Run against a backed-up or isolated database before a deployment.
@@ -21,7 +22,7 @@ export async function reconcileWorlds(){
  for(const [name,query] of checks){const [r]=await sql(query);results.push({name,violations:r.n});}
  return results;
 }
-if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  try{const results=await reconcileWorlds();console.table(results);if(results.some(r=>r.violations>0))process.exitCode=1;}
  catch(e){console.error('Reconciliation failed:',e.code||e.name);process.exitCode=1;}
  finally{await database().end();}
