@@ -55,7 +55,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(adjusted.carrying_amount,'75.00');assert.equal(adjusted.ownership_percentage,'10.00');
   assert.equal(snap.group.balanceCheck,'0.00');
   const control=await createAcquisition(user,{buyerCompanyId:a,targetName:'Control target',targetSector:'Tech',sellerName:'Seller',description:'Acquired operating assets',purchasePrice:'300',targetValuation:'400',ownershipPercentage:'75',operationKey:uid()});
-  const allocation={cash:'100',fixedAssets:'200',intangibles:'40',payables:'40',allOpeningLiabilitiesRecorded:true,intangibleEvidence:'Recorded transferable licence valuation',payableCreditor:'Fictional vendor',evidence:'Recorded asset schedule and trade creditor statement'};
+  const allocation={cash:'100',fixedAssets:'200',intangibles:'40',payables:'40',allOpeningLiabilitiesRecorded:true,intangibleEvidence:'Recorded transferable licence valuation',payableSchedule:'Fictional vendor A | 15 | Invoice A and supplier confirmation reference.\\nFictional vendor B | 25 | Invoice B and supplier confirmation reference.',evidence:'Recorded asset schedule and trade creditor statements'};
   await assert.rejects(()=>saveAcquisitionAllocation(other,control.id,allocation),/before approval/);
   const al=await saveAcquisitionAllocation(user,control.id,allocation);assert.equal(al.goodwill,'75.00');
   for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,control.id,{area,status:'cleared',evidence:'Recorded diligence for '+area});
@@ -68,10 +68,16 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(snap.group.nonControllingInterest,'75.00');assert.equal(snap.group.balanceCheck,'0.00');
   const [cash]=await sql('SELECT cash FROM companies WHERE id=$1',[completed.target_company_id]);assert.equal(cash.cash,'100.00');
   const opening=await economySnapshot(user.id);const statement=opening.financialStatements.find(x=>x.companyId===completed.target_company_id);assert.equal(statement.intangibleAssets,'40.00');assert.equal(statement.acquiredPayables,'40.00');assert.equal(statement.balanceCheck,'0.00');
-  const payable={amount:'20',evidence:'Confirmed creditor payment in fictional records',operationKey:uid()};
-  await assert.rejects(()=>payAcquisitionPayable(other,al.id,payable),/unavailable/);
-  const receipt=await payAcquisitionPayable(user,al.id,payable);assert.equal((await payAcquisitionPayable(user,al.id,payable)).id,receipt.id);
-  await assert.rejects(()=>payAcquisitionPayable(user,al.id,{...payable,amount:'21',operationKey:uid()}),/exceeds/);
+  const creditorRows=snap.payableCreditors.filter(x=>x.allocation_id===al.id).sort((x,y)=>x.creditor.localeCompare(y.creditor));
+  assert.equal(creditorRows.length,2);
+  const ambiguousPayment={amount:'20',evidence:'Confirmed creditor payment in fictional records',operationKey:uid()};
+  await assert.rejects(()=>payAcquisitionPayable(other,al.id,ambiguousPayment),/unavailable/);
+  await assert.rejects(()=>payAcquisitionPayable(user,al.id,ambiguousPayment),/specific creditor/);
+  const paymentA={...ambiguousPayment,creditorId:creditorRows[0].id,amount:'10',operationKey:uid()};
+  const receiptA=await payAcquisitionPayable(user,al.id,paymentA);assert.equal((await payAcquisitionPayable(user,al.id,paymentA)).id,receiptA.id);
+  const paymentB={...ambiguousPayment,creditorId:creditorRows[1].id,amount:'10',operationKey:uid()};
+  const receiptB=await payAcquisitionPayable(user,al.id,paymentB);assert.notEqual(receiptA.id,receiptB.id);
+  await assert.rejects(()=>payAcquisitionPayable(user,al.id,{...paymentA,amount:'6',operationKey:uid()}),/outstanding balance/);
   const afterPay=await economySnapshot(user.id);const paidStatement=afterPay.financialStatements.find(x=>x.companyId===completed.target_company_id);assert.equal(paidStatement.cash,'80.00');assert.equal(paidStatement.acquiredPayables,'20.00');assert.equal(paidStatement.balanceCheck,'0.00');
   await assert.rejects(()=>adjustInvestment(user,acquired.id,{kind:'impairment',amount:'76',reason:'Unsupported write-down',operationKey:uid()}),/impairment review/);
   await adjustInvestment(user,acquired.id,{kind:'impairment',amount:'25',reason:'Documented goodwill loss',operationKey:uid()});
@@ -83,7 +89,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   snap=await corporateFinanceSnapshot(user.id);assert.equal(snap.group.goodwill,'50.00');assert.equal(snap.group.nonControllingInterest,'105.00');assert.equal(snap.group.netIncome,before.netIncome);assert.equal(snap.group.controlSaleGainsReclassified,'13.34');assert.equal(snap.group.balanceCheck,'0.00');
   const [sub]=await sql('SELECT ownership_percentage FROM companies WHERE id=$1',[completed.target_company_id]);assert.equal(sub.ownership_percentage,'65.00');
   assert.equal(snap.holdings.find(x=>x.id===acquired.id).carrying_amount,'238.34');
-  const exit={stakeSold:'45',proceeds:'200',retainedValue:'90',buyer:'Independent fictional buyer',reason:'Documented agreed transfer of corporate control',valuationEvidence:'Recorded fictional sale agreement and retained stake valuation',debtAssumptionEvidence:'Signed sale agreement confirms buyer assumes Fictional vendor payable.',confirmTransfer:true,operationKey:uid()};
+  const exit={stakeSold:'45',proceeds:'200',retainedValue:'90',buyer:'Independent fictional buyer',reason:'Documented agreed transfer of corporate control',valuationEvidence:'Recorded fictional sale agreement and retained stake valuation',debtAssumptionEvidence:'Signed sale agreement confirms buyer assumes Fictional vendor A and Fictional vendor B payables.',confirmTransfer:true,operationKey:uid()};
   const beforeExit=await corporateFinanceSnapshot(user.id);
   const blocker=uid();
   await sql("INSERT INTO business_tasks(id,user_id,world_id,company_id,assignee_id,title,detail,operation_key) SELECT $1,$2,$3,$4,c.id,'Pending task','Open task',$5 FROM contacts c WHERE c.user_id=$2 LIMIT 1",[blocker,user.id,world,completed.target_company_id,uid()]);
