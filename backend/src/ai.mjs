@@ -1,5 +1,96 @@
-const providers=[['groq','GROQ_API_KEY','https://api.groq.com/openai/v1/chat/completions','openai/gpt-oss-20b'],['openrouter','OPENROUTER_API_KEY','https://openrouter.ai/api/v1/chat/completions','openai/gpt-4o-mini'],['openai','OPENAI_API_KEY','https://api.openai.com/v1/chat/completions','gpt-4.1-mini']];
-export function aiStatus(){return providers.map(([name,key,,model])=>({name,model:process.env[`${name.toUpperCase()}_MODEL`]||model,configured:!!process.env[key]})).concat([{name:'gemini',model:process.env.GEMINI_MODEL||'gemini-2.5-flash',configured:!!process.env.GEMINI_API_KEY}]);}
-export async function ask(system,prompt,{fallback='',json=false}={}){for(const [name,key,url,model] of providers){if(!process.env[key])continue;try{const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),14000);let r;try{r=await fetch(url,{method:'POST',headers:{'Authorization':`Bearer ${process.env[key]}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env[`${name.toUpperCase()}_MODEL`]||model,messages:[{role:'system',content:system},{role:'user',content:prompt}],temperature:0.78,max_tokens:850}),signal:controller.signal});}finally{clearTimeout(timeout);}if(!r.ok)continue;const result=await r.json();const value=result.choices?.[0]?.message?.content;if(value?.trim()){if(!json)return value.trim();try{return JSON.parse(value.replace(/^```(?:json)?|```$/g,'').trim());}catch{continue;}}}catch(e){console.warn('AI provider fallback',name,e.message);}}
-if(process.env.GEMINI_API_KEY){try{const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),14000);let r;try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL||'gemini-2.5-flash'}:generateContent?key=${process.env.GEMINI_API_KEY}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{parts:[{text:prompt}]}]}) ,signal:controller.signal});}finally{clearTimeout(timeout);}if(r.ok){const v=(await r.json()).candidates?.[0]?.content?.parts?.[0]?.text;if(v)return json?JSON.parse(v.replace(/^```(?:json)?|```$/g,'').trim()):v.trim();}}catch(e){console.warn('Gemini fallback',e.message);}}
-return fallback;}
+const definitions={
+  groq:{url:'https://api.groq.com/openai/v1/chat/completions',model:'openai/gpt-oss-20b'},
+  gemini:{model:'gemini-2.5-flash'},
+  zai:{url:'https://api.z.ai/api/paas/v4/chat/completions',model:'glm-4.7-flash'},
+  mistral:{url:'https://api.mistral.ai/v1/chat/completions',model:'mistral-small-latest'},
+  openrouter:{url:'https://openrouter.ai/api/v1/chat/completions',model:'openai/gpt-4o-mini'},
+  openai:{url:'https://api.openai.com/v1/chat/completions',model:'gpt-4.1-mini'}
+};
+const defaultOrder=['groq','mistral','openrouter','openai','gemini'];
+
+// Explicit server-only references also work in bundlers that rewrite env access.
+// Read at request time; never serialize a credential to a workflow argument.
+function config(name){
+  switch(name){
+    case 'groq':return {key:process.env.GROQ_API_KEY,model:process.env.GROQ_MODEL};
+    case 'gemini':return {key:process.env.GEMINI_API_KEY,model:process.env.GEMINI_MODEL};
+    case 'zai':return {key:process.env.ZAI_API_KEY,model:process.env.ZAI_MODEL};
+    case 'mistral':return {key:process.env.MISTRAL_API_KEY,model:process.env.MISTRAL_MODEL};
+    case 'openrouter':return {key:process.env.OPENROUTER_API_KEY,model:process.env.OPENROUTER_MODEL};
+    case 'openai':return {key:process.env.OPENAI_API_KEY,model:process.env.OPENAI_MODEL};
+    default:return {};
+  }
+}
+export function providerOrder(){
+  const configured=process.env.AI_ORDER;
+  const names=(configured?configured.split(','):defaultOrder).map(x=>x.trim().toLowerCase()).filter(x=>Object.hasOwn(definitions,x));
+  return [...new Set(names)];
+}
+export function aiStatus(){
+  return providerOrder().map(name=>{
+    const c=config(name);
+    return {name,model:c.model||definitions[name].model,configured:!!c.key?.trim()};
+  });
+}
+export function parseOutput(value,json){
+  if(typeof value!=='string'||!value.trim())return null;
+  if(!json)return value.trim();
+  try{return JSON.parse(value.replace(/^\s*```(?:json)?\s*|\s*```\s*$/gi,'').trim());}
+  catch{return null;}
+}
+async function requestGemini(system,prompt,signal,json,c){
+  const model=c.model||definitions.gemini.model;
+  const payload={systemInstruction:{parts:[{text:system}]},contents:[{parts:[{text:prompt}]}]};
+  if(json)payload.generationConfig={responseMimeType:'application/json'};
+  const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
+    method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':c.key},
+    body:JSON.stringify(payload),signal
+  });
+  if(!response.ok){console.warn('AI provider HTTP status','gemini',response.status);return null;}
+  const parts=(await response.json()).candidates?.[0]?.content?.parts||[];
+  return parts.filter(p=>!p.thought&&typeof p.text==='string').map(p=>p.text).join('')||null;
+}
+async function requestCompatible(name,system,prompt,signal,json,c){
+  const provider=definitions[name];
+  const payload={model:c.model||provider.model,
+    messages:[{role:'system',content:system},{role:'user',content:prompt}],temperature:json?0.3:0.78,max_tokens:json?1800:850};
+  if(name==='zai')payload.thinking={type:'disabled'};
+  // Native JSON mode when supported; gateways/models may reject it, in which
+  // case retry once without that optional field under the same time budget.
+  if(json&&['groq','mistral','openrouter','openai'].includes(name))payload.response_format={type:'json_object'};
+  const send=()=>fetch(provider.url,{method:'POST',headers:{'Authorization':'Bearer '+c.key,'Content-Type':'application/json'},body:JSON.stringify(payload),signal});
+  let response=await send();
+  if([400,422].includes(response.status)&&payload.response_format){
+    delete payload.response_format;
+    response=await send();
+  }
+  if(!response.ok){console.warn('AI provider HTTP status',name,response.status);return null;}
+  return (await response.json()).choices?.[0]?.message?.content||null;
+}
+export async function ask(system,prompt,{fallback='',json=false,validate}={}){
+  const order=providerOrder();
+  let attempted=0;
+  for(const name of order){
+    const c=config(name);
+    if(!c.key?.trim()){console.warn('AI provider not configured',name);continue;}
+    attempted++;
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),14000);
+    try{
+      const value=name==='gemini'
+        ?await requestGemini(system,prompt,controller.signal,json,c)
+        :await requestCompatible(name,system,prompt,controller.signal,json,c);
+      const parsed=parseOutput(value,json);
+      if(parsed!==null){
+        // Semantically unusable JSON must not block the next provider.
+        const result=validate?validate(parsed):parsed;
+        if(result!==null&&result!==undefined&&result!==false)return result;
+      }
+      console.warn('AI provider unusable output',name,json?'json':'text');
+    }catch(error){
+      console.warn('AI provider fallback',name,error.name||'Error');
+    }finally{clearTimeout(timeout);}
+  }
+  console.warn('AI providers exhausted',order.join(','),'attempted',attempted);
+  return fallback;
+}

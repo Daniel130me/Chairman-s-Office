@@ -1,0 +1,119 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+test('legacy API domains remain available',()=>{const routes=read('lib/routes.mjs');for(const name of ['health','me','state','providers','world','messages','contacts','calls/start','invites','meetings','decisions','tenders','settings','push/public','push/subscribe'])assert.ok(routes.includes("'"+name+"'"),name);});
+test('auth does not grant access based on email alone',()=>{const code=read('lib/profile.mjs');assert.match(code,/emailVerified/);assert.match(code,/WHERE auth_user_id=\$1/);assert.match(code,/ON CONFLICT DO NOTHING/);assert.doesNotMatch(code,/WHERE email=/);});
+test('workflow uses durable sleep instead of process polling',()=>{const code=read('workflows/world-engine.js');assert.match(code,/"use workflow"/);assert.match(code,/"use step"/);assert.match(code,/await sleep/);assert.doesNotMatch(code,/setInterval/);});
+test('service worker limits caching to public Next assets',()=>assert.match(read('public/sw.js'),/\/_next\/static\//));
+test('accepting an invitation checks owner, contact, due time and status',()=>assert.match(read('backend/src/world.mjs'),/contact_id=\$3 AND status='pending' AND due_at<=now\(\)/));
+
+test('voice calls use the saved executive identity and an in-world action tool',()=>{
+  const app=read('frontend/src/App.jsx');
+  const world=read('backend/src/world.mjs');
+  const tools=read('lib/vapi-tools.mjs');
+  assert.match(app,/name:c\.name/);
+  assert.match(app,/type:'add-message'/);
+  assert.match(app,/\'tools:append\'/);
+  assert.match(app,/arrange_internal_call/);
+  assert.match(app,/action_token/);
+  assert.match(world,/Your name and identity are exactly/);
+  assert.match(world,/createVapiActionToken/);
+  assert.match(tools,/verifyVapiActionToken/);
+  assert.match(tools,/parseCallIntent\(reason\)/);
+});
+test('delayed callbacks use durable workflows and prompt incoming-call polling',()=>{
+  assert.match(read('workflows/scheduled-call.js'),/await sleep/);
+  assert.match(read('lib/executive-actions.mjs'),/completeScheduledCall/);
+  assert.match(read('lib/push.mjs'),/export async function deliverInvitePush/);
+  assert.match(read('app/api/invites/pending/route.js'),/pendingInvites/);
+  assert.match(read('frontend/src/App.jsx'),/api\('\/invites\/pending'\)/);
+});
+test('scheduled call actions have database-level idempotency protection',()=>{
+  assert.match(read('lib/migrate.mjs'),/scheduler_jobs_action_key_unique/);
+  assert.match(read('lib/executive-actions.mjs'),/ON CONFLICT DO NOTHING/);
+});
+
+test('direct messages and group conversations keep separate state keys',()=>{
+  const communications=read('lib/autonomous-communications.mjs');
+  const app=read('frontend/src/App.jsx');
+  assert.match(communications,/return \{worldConversations:conversations,worldConversationMessages(?:,|\})/);
+  assert.match(app,/state\.worldConversations/);
+  assert.match(app,/state\.worldConversationMessages/);
+});
+test('legacy null engine-lock timestamps do not block world ticks',()=>{
+  const engine=read('lib/world-engine.mjs');
+  const migration=read('lib/migrate.mjs');
+  assert.match(engine,/COALESCE\(lease_until/);
+  assert.match(engine,/COALESCE\(last_tick/);
+  assert.match(engine,/INSERT INTO engine_control/);
+  assert.match(migration,/UPDATE engine_control SET last_tick='-infinity' WHERE last_tick IS NULL/);
+});
+test('the Activity timeline is connected to the phone and its recorded sources',()=>{
+  const app=read('frontend/src/App.jsx');
+  const feed=read('frontend/src/activity-feed.js');
+  assert.match(app,/buildActivityFeed/);
+  assert.match(app,/View full Activity timeline/);
+  for(const source of ['state.events','state.messages','state.calls','state.meetings','state.economy?.journal','state.operations?.auditLog','state.worldConversationMessages'])assert.ok(feed.includes(source),source);
+});
+
+test('Node-only database, push and token work is isolated in durable step functions',()=>{
+  const worldWorkflow=read('workflows/world-engine.js');
+  const callWorkflow=read('workflows/scheduled-call.js');
+  const worldEngine=read('lib/world-engine.mjs');
+  const executiveActions=read('lib/executive-actions.mjs');
+  const packageJson=JSON.parse(read('package.json'));
+  assert.equal(packageJson.dependencies.workflow,'5.8.0');
+  assert.match(worldEngine,/^\"use step\";/);
+  assert.match(executiveActions,/^\"use step\";/);
+  assert.match(read('lib/vapi-action-token.mjs'),/^\"use step\";/);
+  assert.doesNotMatch(read('backend/src/db.mjs'),/node:crypto/);
+  assert.match(read('backend/src/world.mjs'),/^\"use step\";/);
+  assert.match(read('backend/src/db.mjs'),/^\"use step\";/);
+  assert.match(worldWorkflow,/import \{runWorldEngineTick\}/);
+  assert.match(callWorkflow,/import \{completeScheduledCall\}/);
+  assert.match(worldEngine,/export async function runWorldEngineTick[\s\S]*?"use step"/);
+  assert.match(executiveActions,/export async function completeScheduledCall[\s\S]*?"use step"/);
+});
+
+test('engine release handover fences obsolete durable workers and renews without a browser',()=>{
+ const activation=read('lib/engine-activation.mjs'),workflow=read('workflows/world-engine.js'),migration=read('lib/migrate.mjs');
+ assert.match(activation,/ENGINE_KEY='2000-01-01'/);
+ assert.match(activation,/engine_runs.revision<EXCLUDED.revision/);
+ assert.match(activation,/retired:/);
+ assert.match(workflow,/await start\(worldEngine,\[day,token,interval\]\)/);
+ assert.match(migration,/engine_runs ADD COLUMN IF NOT EXISTS revision/);
+});
+test('world stages isolate failures and record their actual health',()=>{
+ const engine=read('lib/world-engine.mjs');
+ for(const stage of ['economy','tasks','approved-actions','communications','market','call-scheduling'])assert.ok(engine.includes("runStage(w,'"+stage+"'"));
+ assert.match(engine,/INSERT INTO engine_stage_status/);
+ assert.match(engine,/consecutive_failures/);
+ const comms=read('lib/autonomous-communications.mjs');
+ assert.match(comms,/decision.needsChairman&&decision.callReason&&!quiet/);
+});
+
+test('activity history is authenticated, tenant-scoped and uses stable cursor pagination',()=>{
+ const backend=read('lib/activity-history.mjs'),routes=read('lib/routes.mjs'),app=read('frontend/src/App.jsx');
+ assert.match(backend,/t\.user_id=\$1/);
+ assert.match(backend,/ORDER BY ts DESC,source DESC,id DESC LIMIT 151/);
+ assert.match(backend,/FOR UPDATE/);
+ assert.match(routes,/activity\/history/);
+ assert.match(routes,/activity\/visit/);
+ assert.match(app,/Load older activity/);
+ assert.match(app,/mergeActivityHistory/);
+});
+
+test('voice notes use private authenticated playback and stable call linkage',()=>{const routes=read('lib/routes.mjs'),notes=read('lib/voice-notes.mjs'),app=read('frontend/src/App.jsx');assert.match(routes,/requireUser\(\)/);assert.match(notes,/v\.user_id=\$2/);assert.match(notes,/x-transcription-consent/);assert.match(notes,/client_message_key/);assert.match(app,/MediaRecorder/);assert.match(app,/api\/voice-notes/);});
+
+
+test('real-world intelligence refresh is connected to the durable world engine and state',async()=>{
+ const engine=read('lib/world-engine.mjs');
+ const world=read('backend/src/world.mjs');
+ const routes=read('lib/routes.mjs');
+ const activation=read('lib/engine-activation.mjs');
+ assert.match(engine,/refreshRealWorldSignals/);assert.match(engine,/real-world-intelligence/);
+ assert.match(world,/realWorldSignalSnapshot/);assert.match(world,/realWorldSignals/);
+ assert.match(routes,/intelligence\/refresh/);assert.match(routes,/realWorldRefreshWorkflow/);
+ assert.match(activation,/ENGINE_REVISION=26/);
+});

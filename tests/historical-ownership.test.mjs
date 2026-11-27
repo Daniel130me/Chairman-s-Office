@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {allocateHistoricalIncome} from '../lib/historical-ownership.mjs';
+const ts=n=>new Date(Date.UTC(2026,0,n)).toISOString();
+const root={id:'p',name:'Parent',ownership_percentage:'100',created_at:ts(1)};
+const sub={id:'s',name:'Sub',parent_company_id:'p',ownership_percentage:'60',created_at:ts(2)};
+const grand={id:'g',name:'Grand',parent_company_id:'s',ownership_percentage:'75',created_at:ts(3)};
+const ac=[{target_company_id:'s',buyer_company_id:'p',ownership_percentage:'80',completed_at:ts(2)},{target_company_id:'g',buyer_company_id:'s',ownership_percentage:'75',completed_at:ts(3)}];
+const changes=[{subsidiary_id:'s',previous_ownership:'80',remaining_ownership:'60',created_at:ts(5)}];
+test('historical NCI uses transaction-date stake and nested control, including former subsidiaries',()=>{const r=allocateHistoricalIncome([root,sub,{...grand,disposed_at:ts(8),parent_company_id:null}],ac,changes,[{company_id:'s',at:ts(4),net:'100'},{company_id:'s',at:ts(6),net:'100'},{company_id:'g',at:ts(6),net:'100'}],[],'300');assert.equal(r.nonControllingIncome,'115.00');assert.equal(r.parentNetIncome,'185.00');assert.deepEqual(r.ownershipWarnings,[]);});
+test('group adjustments use owner of the transaction and signed minority income',()=>{const r=allocateHistoricalIncome([root,sub,grand],ac,changes,[{company_id:'g',at:ts(6),net:'-100'}],[{company_id:'s',at:ts(6),net:'20'}],'-80');assert.equal(r.nonControllingIncome,'-47.00');assert.equal(r.parentNetIncome,'-33.00');});
+test('missing history or totals mismatch never invents allocation',()=>{const r=allocateHistoricalIncome([root,sub],[],[],[{company_id:'s',at:ts(6),net:'100'}],[],'100');assert.equal(r.parentNetIncome,null);assert.ok(r.ownershipWarnings.length);const mismatch=allocateHistoricalIncome([root],[],[],[{company_id:'p',at:ts(6),net:'100'}],[],'101');assert.equal(mismatch.nonControllingIncome,null);});

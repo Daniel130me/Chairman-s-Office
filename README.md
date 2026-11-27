@@ -1,55 +1,59 @@
-# Chairman's Office — Experience-first Neon/Render PWA rebuild
+# Chairman's Office — Next.js / Vercel migration
 
-An immersive fictional executive smartphone experience. React/Vite frontend and Express backend run together on a **single Render Free Web Service**, with state persisted in **Neon PostgreSQL**. The user creates a fictional group, meets a chief of staff, develops distinct relationships with internal executives and external stakeholders, responds to incoming call invitations, conducts board discussions, and records strategic decisions. The interface is an original Samsung One UI–inspired phone experience without Samsung branding or proprietary assets.
+The original Render application stays on **main**. This branch is a migration candidate, not a production release. It preserves the existing executive phone, PWA assets, fictional world and Vapi voice calls.
 
-**Development status:** This is a substantial replacement implementation, not a reviewed production release. Code has been statically checked; network-dependent npm install, React production build, Neon integration, Vapi audio and device push tests require a connected development environment and real credentials. The user must review and test before putting it into public service. Existing v0.5 code remains on GitHub; this package does not silently overwrite it.
+## How it works
 
-## Structure
+- app/: Next.js pages and API route handlers (no separate Express process).
+- frontend/src/: existing React phone and apps. Loaded on the browser only.
+- backend/src/db.mjs, world.mjs, ai.mjs: existing database and simulation logic.
+- lib/auth/: Neon managed Better Auth; lib/profile.mjs links verified auth accounts to original application IDs.
+- lib/routes.mjs: validated API requests, user isolation, shared database-backed rate limits.
+- workflows/ and lib/world-engine.mjs: durable scheduling, calls, business developments and Web Push.
+- public/: PWA assets and service worker. Private data is never cached.
+- tests/: automated unit and structure checks.
 
-- `frontend/`: React 18, Vite 6, mobile PWA shell, onboarding, notification shade, lock screen, home apps, sound synthesizer, Vapi Web SDK, PWA service worker
-- `backend/`: Express REST API, `pg`/Neon schema, session authentication, user-isolated fictional world, multiple AI providers, character dialogue, meetings, negotiations, call log, Web Push, autonomic scheduler
-- `render.yaml`: one Render Free web service that compiles the frontend and serves it from Express
+## Local setup
 
-## Local setup (Node.js 22+)
+Install Node.js 22 or newer.
 
-1. Create a Neon PostgreSQL database and copy its **pooled** connection URL.
-2. `cp backend/.env.example backend/.env` and set `DATABASE_URL`. Keep that file private; never commit it.
-3. `cp frontend/.env.example frontend/.env` and set `VITE_VAPI_PUBLIC_KEY` and `VITE_VAPI_ASSISTANT_ID` for real internet calls. These are client-side public credentials; **never expose private Vapi/API tokens** through `VITE_` variables.
-4. In terminal A: `cd backend && npm install && npm run dev`
-5. In terminal B: `cd frontend && npm install && npm run dev`
-6. Open `http://localhost:5173`. Register an account (10+ character password). The PostgreSQL schema is created automatically at backend startup.
-7. To test the production combined-service layout, run `cd frontend && npm run build`, then restart backend and visit `http://localhost:3002`.
+```bash
+git clone -b nextjs-vercel-migration https://github.com/Daniel130me/Chairman-s-Office.git
+cd Chairman-s-Office
+npm install
+```
 
-**Important:** The backend must access Neon; frontend is always same-origin `/api`, with Vite's development proxy in development and Express serving built frontend in production. Do not configure cross-site cookies unnecessarily.
+Copy .env.example to .env.local (PowerShell: Copy-Item .env.example .env.local).
+Use a **separate Neon database branch** for tests. Enable Neon Auth email/password and email verification; configure your app origin as trusted. Use the database connection string and Auth base URL from that same environment. Set NEON_AUTH_COOKIE_SECRET and CRON_SECRET to separate random secrets of at least 32 characters. Generate each with node -e "console.log(require('crypto').randomBytes(32).toString('hex'))".
 
-## Deploy to Render Free
+```bash
+npm run db:migrate
+npm test
+npm run dev
+```
 
-1. Push **this source** into your existing GitHub repository on a new branch after reviewing it; keep your existing implementation as a backup.
-2. Connect the repository to Render and use the included `render.yaml` blueprint, or create a Node Web Service with root directory at repository root.
-3. Build: `npm ci --prefix backend --omit=dev && npm ci --prefix frontend --include=dev && npm run build --prefix frontend`
-4. Start: `npm start --prefix backend`
-5. Set environment variables in Render: `DATABASE_URL`, `NODE_ENV=production`, `VITE_VAPI_PUBLIC_KEY`, `VITE_VAPI_ASSISTANT_ID`, server-side AI keys, and optional `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Values beginning `VITE_` are embedded at **build time**; redeploy after changing them.
-6. Open `/api/health` on your assigned Render HTTPS URL; verify `ok: true`.
-7. Register, complete onboarding, verify the 20-second initial call invitation, test each app, then install the PWA via Android Chrome or iPhone Safari **Add to Home Screen**.
-8. Add the Render HTTPS origin to your Vapi allowed origins. Grant microphone access when testing a call.
-9. Create Web Push VAPID keys through a trusted Web Push utility (e.g., `npx web-push generate-vapid-keys`) and add them to Render before enabling in-app alerts.
-10. Optionally configure uptime monitoring to GET `/api/health` every ~10 minutes; this is **not** guaranteed to keep Render Free running. Render can still suspend or restart free services. Neon persists data across Render restarts; the scheduler catches up with missed opportunities when it runs again, but cannot deliver a phone call while the process is offline.
+Visit http://localhost:3000. Register, verify your email, sign in and create an empire. Add Vapi and AI keys as needed. Only public Vapi credentials may use NEXT_PUBLIC_.
 
-**Free-tier caveats:** Render Free is not reliable 24/7 infrastructure. The scheduler uses periodic polling, not durable hosted job execution. The service's filesystem is disposable, which is why application data is held in Neon. PWA push is a notification that opens the app, not native cellular VoIP ringing when the app is closed. A server uptime monitor cannot guarantee deliverability or avoid free-plan limits. For a commercial launch use an always-on service and production job runner, database monitoring, backups, metering, and a security review.
+## Vercel setup
 
-## Realism / experience
+1. Create a separate Vercel project and use nextjs-vercel-migration as its production branch for testing. Root directory: repository root. Framework: Next.js. Node.js 22 and Fluid Compute enabled.
+2. Add environment variables from .env.example. Set APP_ORIGIN to the exact HTTPS origin. Add the same origin in Neon Auth and Vapi. Run the database migration on the test database first.
+3. Keep WORLD_ENGINE_ENABLED=false until onboarding is tested and Render is not writing to the same database. Then set true and redeploy.
+4. Vercel Cron starts a bounded 25-hour Workflow daily. To start immediately, send an authenticated GET to /api/engine/start with Authorization: Bearer <CRON_SECRET>. Keep the secret private. Check Workflow observability and Neon engine_runs for the run ID and heartbeat.
+5. Install the PWA and enable notifications in Settings. On iPhone use Add to Home Screen.
 
-Distinct contacts have different agendas and relationships; messages and board dialogue call AI models where credentials are available, with deterministic fallback if a provider is unavailable. Full voice sessions require the Vapi public key and a compatible assistant. A locally generated melodic ringtone plays during an in-app call invitation where the browser allows audio; it uses no third-party copyrighted music. The PWA supplies an original lock screen, home screen, app drawer, quick shade and dedicated apps. Events, messages, discussions, bids and decisions persist in Neon. The user can install the experience, but offline access to logged-in data is intentionally limited (no insecure database snapshots in the service-worker cache).
+The default 120-second scheduling interval preserves the old cadence but may exceed free workflow events or Neon compute allowances. WORLD_ENGINE_INTERVAL_SECONDS is configurable (60–900). Monitor usage rather than silently sacrificing the experience. Vercel Hobby is non-commercial. Vapi and AI providers have separate billing. Daily runs may overlap; a database lease prevents parallel sweeps. Batch size is ten worlds per tick; larger deployments need sharding.
 
-## Known gaps before a public launch
+## Existing accounts
 
-- The original v0.5 repository contains additional scenario detail and workflow edge cases not all replicated in this rewrite. Compare both versions before replacing production code.
-- The meeting interface uses sequential AI turns and device speech is not yet orchestrated into simultaneous multi-person voice conversation.
-- Advanced phone gestures and accessibility audit need physical-device testing.
-- Database migrations currently use idempotent `CREATE TABLE` statements at startup; adopt versioned SQL migration tooling before evolving schema in production.
-- The scheduler runs only while Render is up and has no distributed lease; keep **one server instance** until a durable job queue is implemented.
-- Important production hardening includes user-level quotas, durable audit logs, multi-factor auth, session cleanup, per-character structured long-term memory, AI cost metering, robust request validation and stronger security testing.
+The database migration adds auth_user_id without deleting data or changing existing UUIDs. Existing users need a verified managed-auth account. An administrator must independently verify ownership and explicitly map that account ID to the old user's auth_user_id. Never auto-link by email or copy password hashes. Test on a separate Neon branch and back up first.
 
-## Safety
+## Release checks
 
-This is an immersive **fictional simulation**. It must never falsely indicate that real contracts, company actions, wealth or regulatory activity happened outside the application. Keep all actual provider private keys server-side. Never commit `.env` files.
+Run npm test and npm run build. Generate and commit the root package-lock.json after a successful install, then use npm ci. See TESTING.md. Live Neon, Vapi, provider and phone tests must pass before replacing Render.
+
+Browser push is not native VoIP: a closed PWA can display a notification but cannot reliably ring continuously or answer automatically. The current boardroom uses sequential text turns, not simultaneous executive voice. Those limitations remain. The old Render Express files are retained for comparison only; Next.js does not start them.
+
+## Rollback
+
+Keep main, the old deployment, and the Neon backup untouched. Disable the Vercel world engine before restoring Render. Never run both schedulers on the same active database.
