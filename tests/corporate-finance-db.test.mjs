@@ -114,6 +114,33 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   const full=await disposeSubsidiary(user,exitHolding.id,{...exit,stakeSold:'100',proceeds:'25',retainedValue:'0',operationKey:uid()});
   assert.equal(full.retained_stake,'0.00');assert.equal(full.parent_gain,'5.00');assert.equal(full.group_gain,'5.00');
   snap=await corporateFinanceSnapshot(user.id);assert.equal(snap.holdings.find(x=>x.id===exitHolding.id).status,'exited');assert.equal(snap.group.balanceCheck,'0.00');
+  const nestedDeal=await createAcquisition(user,{buyerCompanyId:a,targetName:'Nested holding company',targetSector:'Technology',sellerName:'Group Seller',description:'Acquire a holding company with operating subsidiaries',purchasePrice:'100',targetValuation:'120',ownershipPercentage:'100',operationKey:uid()});
+  await saveAcquisitionAllocation(user,nestedDeal.id,{cash:'50',fixedAssets:'10',intangibles:'5',payables:'0',zeroOpeningLiabilities:true,evidence:'Opening cash and fixed asset schedule verified.',intangibleEvidence:'Identifiable software and customer relationship valuation.'});
+  for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,nestedDeal.id,{area,status:'cleared',evidence:'Nested holding diligence verified for '+area});
+  await transitionAcquisition(user,nestedDeal.id,{status:'approved',reason:'Board approved nested holding acquisition'});
+  const nestedParent=await transitionAcquisition(user,nestedDeal.id,{status:'completed',reason:'Seller settlement confirmed'});
+  const childDeal=await createAcquisition(user,{buyerCompanyId:nestedParent.target_company_id,targetName:'Nested operating company',targetSector:'Services',sellerName:'Operating Seller',description:'Acquire operating subsidiary',purchasePrice:'30',targetValuation:'40',ownershipPercentage:'80',operationKey:uid()});
+  await saveAcquisitionAllocation(user,childDeal.id,{cash:'10',fixedAssets:'5',intangibles:'5',payables:'0',zeroOpeningLiabilities:true,evidence:'Operating company opening assets independently reviewed.',intangibleEvidence:'Software and customer relationships independently valued.'});
+  for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,childDeal.id,{area,status:'cleared',evidence:'Operating subsidiary diligence verified for '+area});
+  await transitionAcquisition(user,childDeal.id,{status:'approved',reason:'Board approved operating subsidiary acquisition'});
+  const nestedChild=await transitionAcquisition(user,childDeal.id,{status:'completed',reason:'Operating subsidiary settlement confirmed'});
+  const internal={lenderCompanyId:nestedParent.target_company_id,borrowerCompanyId:nestedChild.target_company_id,amount:'5',purpose:'Intercompany working capital',operationKey:uid()};
+  await advanceIntercompany(user,internal);
+  snap=await corporateFinanceSnapshot(user.id);
+  const nestedHolding=snap.holdings.find(x=>x.acquisition_id===nestedDeal.id),childHolding=snap.holdings.find(x=>x.acquisition_id===childDeal.id);
+  assert.ok(nestedHolding&&childHolding);assert.equal(snap.group.balanceCheck,'0.00');
+  const nestedExit=await disposeSubsidiary(user,nestedHolding.id,{...exit,stakeSold:'100',proceeds:'115',retainedValue:'0',operationKey:uid()});
+  assert.equal(nestedExit.retained_stake,'0.00');assert.equal(nestedExit.disposed_company_ids.length,2);
+  assert.equal(nestedExit.closing_statement.companyCount,2);assert.equal(nestedExit.closing_statement.companies.length,2);
+  assert.equal(nestedExit.closing_statement.subsidiaryCount,1);assert.equal(nestedExit.closing_statement.intercompanyEliminated,'5.00');
+  const [archivedParent,archivedChild]=await sql('SELECT id,disposed_at FROM companies WHERE id=ANY($1::uuid[]) ORDER BY id',[nestedExit.disposed_company_ids]);
+  assert.ok(archivedParent.disposed_at&&archivedChild.disposed_at);
+  const [closedChildHolding]=await sql('SELECT status,target_company_id FROM company_investments WHERE id=$1',[childHolding.id]);
+  assert.equal(closedChildHolding.status,'exited');assert.equal(closedChildHolding.target_company_id,null);
+  snap=await corporateFinanceSnapshot(user.id);
+  assert.equal(snap.holdings.find(x=>x.id===nestedHolding.id).status,'exited');
+  assert.equal(snap.group.balanceCheck,'0.00');
+
  }finally{
   await sql('DELETE FROM intercompany_facilities WHERE user_id=$1',[user.id]);
   await sql('DELETE FROM users WHERE id=ANY($1::uuid[])',[[user.id,other.id]]);
