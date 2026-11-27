@@ -29,3 +29,11 @@ test('new executive events have private actionable notification destinations',()
  assert.equal(notificationForEvent('travel-disruption').target,'travel');
  assert.equal(notificationForEvent('call-recovered').target,'phone');
 });
+
+import {parseReplacementQuote} from '../lib/travel-rebooking.mjs';
+test('fictional concierge quotes use recorded provider and bounded recorded price',()=>{
+ const b={provider:'Recorded carrier',amount:'100.00'},r={decision:'offer',description:'Replacement flight',reason:'Provider offers an alternative',markupBasisPoints:1500,feeBasisPoints:500};
+ assert.deepEqual(parseReplacementQuote(r,b),{decision:'offer',provider:b.provider,description:r.description,amount:'115.00',fee:'5.00',reason:r.reason});
+ assert.equal(parseReplacementQuote({...r,markupBasisPoints:5001},b),null);
+ assert.equal(parseReplacementQuote({...r,feeBasisPoints:-1},b),null);
+});
