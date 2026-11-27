@@ -16,7 +16,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Independent automated verification reported successful for PR #2.
 - [x] Secured refinancing with replacement collateral and cash/debt covenants implemented on Batch 5.
 - [x] Limited evidence-backed allocation of opening cash and fixed assets, with proportionate NCI and goodwill elimination.
-- [ ] Controlled-subsidiary disposal/deconsolidation, broader fair-value allocation (liabilities, intangible assets and bargain purchases), richer ownership/covenant mechanisms.
+- [x] Control-retaining partial subsidiary stake sale with ownership updates, goodwill preservation and group equity reclassification implemented.
+- [ ] Loss-of-control disposal/deconsolidation, broader fair-value allocation (liabilities, intangible assets and bargain purchases), richer ownership/covenant mechanisms; date-weighted historical attribution of group earnings.
 - [ ] Final merge and live ledger reconciliation.
 
 ## Batch 3 — Business Operations
@@ -29,7 +30,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [ ] Exercise live user flows.
 - [x] Unpaid/part-paid supplier credit returns and non-restockable customer returns implemented on Batch 5.
 - [x] Competitive RFQ for manual draft orders (2–5 distinct supplier companies, independent quotes, up to four rounds, selection followed by separate approval).
-- [ ] More detailed negotiated dispute remedies beyond current settlement/credit model.
+- [x] Evidence-backed installment settlement agreements, confirmed receipts, deadline escalation and conditional final invoice credits implemented.
+- [ ] Renegotiation after partial payment and other commercial remedies beyond installments/settlement/credit.
 - [ ] Final merge, deployment and acceptance of operational outcomes.
 
 ## Batch 4 — Executive Experience
@@ -49,7 +51,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Add database-level regressions and read-only reconciliation for financial/operational invariants.
 - [x] Write release, backup, acceptance and rollback runbook (`final-release-verification.md`).
 - [x] Initial Batch 5 GitHub Actions run 45945270170 passed every migration, transaction and production-build step.
-- [ ] Verify updated Batch 5 commit including competitive sourcing, acquisition allocation and autonomous replacement quotes.
+- [x] GitHub Actions run 45946826729 passed for competitive sourcing, limited allocation and autonomous replacement quotes.
+- [ ] Verify latest commit including control-retaining sales and installment settlements.
 - [ ] Run all automated tests, verify Neon migrations and deployment, reconcile financial state.
 - [ ] Test inbound/outbound calls, callbacks, missed/declined calls, voicemail, voice notes, cross-channel memory and boardroom outcomes.
 - [ ] Test autonomous offline progression (including multi-day absence and duplicate prevention), activity history and every phone app.
