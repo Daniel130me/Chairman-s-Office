@@ -125,6 +125,18 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,childDeal.id,{area,status:'cleared',evidence:'Operating subsidiary diligence verified for '+area});
   await transitionAcquisition(user,childDeal.id,{status:'approved',reason:'Board approved operating subsidiary acquisition'});
   const nestedChild=await transitionAcquisition(user,childDeal.id,{status:'completed',reason:'Operating subsidiary settlement confirmed'});
+  const branchDeal=await createAcquisition(user,{buyerCompanyId:nestedParent.target_company_id,targetName:'Second-tier branch company',targetSector:'Services',sellerName:'Branch Seller',description:'Second-tier subsidiary for disposal test',purchasePrice:'10',targetValuation:'15',ownershipPercentage:'100',operationKey:uid()});
+  await saveAcquisitionAllocation(user,branchDeal.id,{cash:'0',fixedAssets:'0',intangibles:'0',payables:'0',zeroOpeningLiabilities:true,evidence:'No opening assets or liabilities were transferred.'});
+  for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,branchDeal.id,{area,status:'cleared',evidence:'Second-tier subsidiary diligence verified for '+area});
+  await transitionAcquisition(user,branchDeal.id,{status:'approved',reason:'Board approved second-tier acquisition'});
+  const branchCompany=await transitionAcquisition(user,branchDeal.id,{status:'completed',reason:'Second-tier acquisition settlement confirmed'});
+  const branchHolding=(await corporateFinanceSnapshot(user.id)).holdings.find(x=>x.acquisition_id===branchDeal.id);
+  const branchSale=await disposeSubsidiary(user,branchHolding.id,{stakeSold:'100',proceeds:'20',retainedValue:'0',buyer:'Second-tier buyer',reason:'Documented sale of a subsidiary owned by a subsidiary',valuationEvidence:'Signed second-tier sale agreement and independent valuation.',confirmTransfer:true,operationKey:uid()});
+  assert.equal(branchSale.disposed_company_ids.length,1);assert.equal(branchSale.closing_statement.companyCount,1);
+  const [stillActiveParent]=await sql('SELECT disposed_at FROM companies WHERE id=$1',[nestedParent.target_company_id]);assert.equal(stillActiveParent.disposed_at,null);
+  const [soldBranch]=await sql('SELECT disposed_at FROM companies WHERE id=$1',[branchCompany.target_company_id]);assert.ok(soldBranch.disposed_at);
+  assert.equal((await corporateFinanceSnapshot(user.id)).group.balanceCheck,'0.00');
+
   const lenderOne=await createCompanyLoan(user,{companyId:nestedChild.target_company_id,lender:'Nested Bank A',purpose:'Equipment finance',principal:'20',annualInterestRate:'6',termMonths:12,operationKey:uid()});
   await setLoanTerms(user,lenderOne.id,{kind:'collateral',amount:'2.50',description:'Equipment pool secured to Bank A'});
   await transitionCompanyLoan(user,lenderOne.id,{status:'approved',reason:'Board approved Bank A facility'});
