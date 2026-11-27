@@ -22,6 +22,7 @@ try{
   else if(path==='/api/invites/pending')payload={invites:[]};
   else if(path==='/api/providers')payload={providers:[]};
   else if(path==='/api/push/status')payload={devices:0,configured:false};
+  else if(path==='/api/engine/status')payload={health:'healthy',engine:{revision:22,expectedRevision:22,active:true,lastTickAt:null},world:{lastCheckedAt:null},external:{signalsAt:null,newsAt:null},stages:[]};
   await route.fulfill({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(payload)});
  });
  const page=await context.newPage();page.setDefaultTimeout(30000);
@@ -53,6 +54,7 @@ try{
  let settingsResponse=null;
  try{settingsResponse=await page.goto(base+'/?app=settings',{waitUntil:'domcontentloaded'});}catch(error){throw new Error('Settings deep link navigation failed: '+error.message+'; server: '+serverOutput+'; diagnostics: '+JSON.stringify(diagnostics));}
  await page.getByText('App & connection',{exact:true}).waitFor().catch(async()=>{const details=await page.evaluate(()=>({online:navigator.onLine,controlled:!!navigator.serviceWorker.controller,url:location.href,ready:document.readyState}));throw new Error('Settings deep link did not restore after reconnect. '+JSON.stringify(details)+' Response: '+(settingsResponse?.status()??'none')+' Server: '+serverOutput+' Diagnostics: '+JSON.stringify(diagnostics)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
+ assert.equal(diagnostics.pageErrors.length,0,'Settings and PWA must not throw runtime errors: '+JSON.stringify(diagnostics.pageErrors));
  await page.getByText('Private records are not saved to persistent browser storage.',{exact:false}).waitFor();
  const keys=await page.evaluate(async()=>{const result=[];for(const name of await caches.keys()){if(!name.startsWith('chairmans-office-'))continue;const cache=await caches.open(name);for(const req of await cache.keys())result.push(new URL(req.url).pathname);}return result;});
  assert.ok(keys.includes('/offline.html'));assert.ok(keys.every(p=>p.startsWith('/_next/static/')||['/offline.html','/icon-192.png','/icon-512.png','/apple-touch-icon.png','/manifest.webmanifest'].includes(p)));assert.ok(stateRequests>=2);

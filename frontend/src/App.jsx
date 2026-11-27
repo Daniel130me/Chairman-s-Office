@@ -5,6 +5,7 @@ import { authClient } from '../../lib/auth/client.js';
 import{api,usd,shortDate,shortTime,toUint8}from './api.js';import{playRing,stopRing,clickTone,unlockAudio}from './sound.js';
 import {usePwa} from './usePwa.js';
 import PwaSettings from './PwaSettings.jsx';
+import {normalizeEngineStatus} from './engine-status.mjs';
 import {notificationIntent,liveInvite,shouldPoll} from './pwa-rules.mjs';
 import {useRealtimeMeetingMic} from './useRealtimeMeetingMic.js';
 import {useMeetingMic} from './useMeetingMic.js';
@@ -798,7 +799,7 @@ function Intelligence({state,onBack,onOpen,onChange,notify}){const [refreshing,s
 function Matter({t,state,onBack,onChange,notify}){const[text,setText]=useState(''),[busy,setBusy]=useState(false);const decisions=state.decisions.filter(d=>d.thread_id===t.id);async function submit(){setBusy(true);try{await api('/decisions',{method:'POST',body:{threadId:t.id,content:text}});setText('');await onChange();notify('Directive entered into your decision ledger.')}catch(e){notify(e.message)}finally{setBusy(false)}}return <><AppHeader title="Strategic matter" back={onBack} subtitle={t.priority.toUpperCase()+' PRIORITY'}/><div className="matter-detail"><span className="matter-pill">{t.category}</span><h2>{t.title}</h2><p>{t.summary}</p></div><div className="content-section"><h3>Chairman's decision ledger</h3>{decisions.length?decisions.map(d=><div className="decision" key={d.id}><b>{shortDate(d.created_at)} · {shortTime(d.created_at)}</b><p>{d.content}</p></div>):<p className="section-copy">No formal direction recorded yet.</p>}<label className="decision-input">Issue an executive directive<textarea rows={4} value={text} onChange={e=>setText(e.target.value)} placeholder="Record your decision, instruction or position…"/></label><Primary disabled={!text.trim()||busy} onClick={submit}>Record directive <ChevronRight size={18}/></Primary></div></>}
 function EngineDiagnostics(){
  const [status,setStatus]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- async function check(){setBusy(true);setError('');try{setStatus(await api('/engine/status'));}catch(e){setError(e.message);}finally{setBusy(false);}}
+ async function check(){setBusy(true);setError('');try{const raw=await api('/engine/status');const normalized=normalizeEngineStatus(raw);if(!normalized)throw new Error('Engine diagnostics returned incomplete data.');setStatus(normalized);}catch(e){setStatus(null);setError(e.message);}finally{setBusy(false);}}
  async function activate(){setBusy(true);setError('');try{await api('/engine/activate',{method:'POST',body:{}});await check();}catch(e){setError(e.message);}finally{setBusy(false);}}
  useEffect(()=>{void check();},[]);
  const failures=(status?.stages||[]).filter(x=>x.consecutive_failures>0);
