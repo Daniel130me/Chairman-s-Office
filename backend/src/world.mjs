@@ -1,5 +1,5 @@
-import {mergeTranscript} from '../../lib/executive-experience-rules.mjs';
 "use step";
+import {mergeTranscript} from '../../lib/executive-experience-rules.mjs';
 
 import {sql,one,transaction,uid,iso} from './db.mjs';
 import {ask} from './ai.mjs';
