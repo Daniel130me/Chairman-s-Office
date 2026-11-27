@@ -55,7 +55,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(adjusted.carrying_amount,'75.00');assert.equal(adjusted.ownership_percentage,'10.00');
   assert.equal(snap.group.balanceCheck,'0.00');
   const control=await createAcquisition(user,{buyerCompanyId:a,targetName:'Control target',targetSector:'Tech',sellerName:'Seller',description:'Acquired operating assets',purchasePrice:'300',targetValuation:'400',ownershipPercentage:'75',operationKey:uid()});
-  const allocation={cash:'100',fixedAssets:'200',intangibles:'40',payables:'40',allOpeningLiabilitiesRecorded:true,intangibleEvidence:'Recorded transferable licence valuation',payableSchedule:'Fictional vendor A | 15 | Invoice A and supplier confirmation reference.\\nFictional vendor B | 25 | Invoice B and supplier confirmation reference.',evidence:'Recorded asset schedule and trade creditor statements'};
+  const allocation={cash:'100',fixedAssets:'200',intangibles:'40',payables:'40',allOpeningLiabilitiesRecorded:true,intangibleEvidence:'Recorded transferable licence valuation',payableSchedule:'Fictional vendor A | 15 | Invoice A and supplier confirmation reference.\nFictional vendor B | 25 | Invoice B and supplier confirmation reference.',evidence:'Recorded asset schedule and trade creditor statements'};
   await assert.rejects(()=>saveAcquisitionAllocation(other,control.id,allocation),/before approval/);
   const al=await saveAcquisitionAllocation(user,control.id,allocation);assert.equal(al.goodwill,'75.00');
   for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,control.id,{area,status:'cleared',evidence:'Recorded diligence for '+area});
