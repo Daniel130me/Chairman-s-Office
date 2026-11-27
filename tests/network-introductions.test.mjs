@@ -18,7 +18,7 @@ test('network introduction persistence creates the contact, message, timeline ev
  const result=await persistNetworkIntroduction(q,{userId:'user-1',worldId:'world-1',company:{id:'company-1'},decision,context:{},operationKey:'network-intro:world-1:2026-11-27'});
  assert.equal(result.introduced,true);
  assert.ok(result.contactId);
- for(const prefix of ['INSERT INTO external_organizations','INSERT INTO contacts','INSERT INTO threads','INSERT INTO messages','INSERT INTO events','INSERT INTO character_relationships','INSERT INTO character_memory_jobs','INSERT INTO network_introductions','UPDATE worlds'])assert.ok(calls.some(x=>x.query.startsWith(prefix)),prefix);const threadQuery=calls.find(x=>x.query.startsWith('INSERT INTO threads')).query;assert.match(threadQuery,/contact_id,title,category,summary,priority/);assert.doesNotMatch(threadQuery,/company_id|next_at|stage|status/);
+ for(const prefix of ['INSERT INTO external_organizations','INSERT INTO contacts','INSERT INTO threads','INSERT INTO messages','INSERT INTO events','INSERT INTO stakeholder_engagements','INSERT INTO character_relationships','INSERT INTO character_memory_jobs','INSERT INTO network_introductions','UPDATE worlds'])assert.ok(calls.some(x=>x.query.startsWith(prefix)),prefix);const threadQuery=calls.find(x=>x.query.startsWith('INSERT INTO threads')).query;assert.match(threadQuery,/contact_id,title,category,summary,priority/);assert.doesNotMatch(threadQuery,/company_id|next_at|stage|status/);
 });
 test('network introduction persistence is idempotent for the same operation key',async()=>{
  let calls=0;
