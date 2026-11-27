@@ -125,7 +125,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   await transitionAcquisition(user,childDeal.id,{status:'approved',reason:'Board approved operating subsidiary acquisition'});
   const nestedChild=await transitionAcquisition(user,childDeal.id,{status:'completed',reason:'Operating subsidiary settlement confirmed'});
   const internal={lenderCompanyId:nestedParent.target_company_id,borrowerCompanyId:nestedChild.target_company_id,amount:'5',purpose:'Intercompany working capital',operationKey:uid()};
-  await advanceIntercompany(user,internal);
+  const internalFacility=await advanceIntercompany(user,internal);
   snap=await corporateFinanceSnapshot(user.id);
   const nestedHolding=snap.holdings.find(x=>x.acquisition_id===nestedDeal.id),childHolding=snap.holdings.find(x=>x.acquisition_id===childDeal.id);
   assert.ok(nestedHolding&&childHolding);assert.equal(snap.group.balanceCheck,'0.00');
@@ -133,6 +133,10 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(nestedExit.retained_stake,'0.00');assert.equal(nestedExit.disposed_company_ids.length,2);
   assert.equal(nestedExit.closing_statement.companyCount,2);assert.equal(nestedExit.closing_statement.companies.length,2);
   assert.equal(nestedExit.closing_statement.subsidiaryCount,1);assert.equal(nestedExit.closing_statement.intercompanyEliminated,'5.00');
+  assert.equal(nestedExit.closing_statement.intercompanyFacilities.length,1);
+  const [transferredFacility]=await sql('SELECT transferred_at,transferred_to FROM intercompany_facilities WHERE id=$1',[internalFacility.id]);
+  assert.ok(transferredFacility.transferred_at);assert.equal(transferredFacility.transferred_to,exit.buyer);
+  await assert.rejects(()=>repayIntercompany(user,internalFacility.id,{amount:'1',reason:'Late repayment',operationKey:uid()}),/transferred/);
   const [archivedParent,archivedChild]=await sql('SELECT id,disposed_at FROM companies WHERE id=ANY($1::uuid[]) ORDER BY id',[nestedExit.disposed_company_ids]);
   assert.ok(archivedParent.disposed_at&&archivedChild.disposed_at);
   const [closedChildHolding]=await sql('SELECT status,target_company_id FROM company_investments WHERE id=$1',[childHolding.id]);
