@@ -35,7 +35,7 @@ try{
  await page.reload({waitUntil:'domcontentloaded'}).catch(()=>null);
  await page.waitForFunction(()=>document.body.innerText.includes('Your office is temporarily unreachable.'),{},{timeout:20000}).catch(async()=>{throw new Error('Offline navigation did not return the public offline shell. Body: '+(await page.locator('body').innerText()).slice(0,1000));});
  await context.setOffline(false);await page.getByText('PWA smoke empire',{exact:true}).waitFor();
- await page.goto(base+'/?app=settings');await page.getByText('App & connection',{exact:true}).waitFor();
+ await page.goto(base+'/?app=settings');await page.getByText('App & connection',{exact:true}).waitFor().catch(async()=>{const diagnostics=await page.evaluate(()=>({online:navigator.onLine,controlled:!!navigator.serviceWorker.controller,url:location.href}));throw new Error('Settings deep link did not restore after reconnect. '+JSON.stringify(diagnostics)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
  await page.getByText('Private records are not saved to persistent browser storage.',{exact:false}).waitFor();
  const keys=await page.evaluate(async()=>{const result=[];for(const name of await caches.keys()){if(!name.startsWith('chairmans-office-'))continue;const cache=await caches.open(name);for(const req of await cache.keys())result.push(new URL(req.url).pathname);}return result;});
  assert.ok(keys.includes('/offline.html'));assert.ok(keys.every(p=>p.startsWith('/_next/static/')||['/offline.html','/icon-192.png','/icon-512.png','/apple-touch-icon.png','/manifest.webmanifest'].includes(p)));assert.ok(stateRequests>=2);
