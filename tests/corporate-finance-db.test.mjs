@@ -6,7 +6,7 @@ import {hireEmployee} from '../lib/employment.mjs';
 import {processLoanObligations} from '../lib/loan-schedule.mjs';
 import {economySnapshot,advanceEconomy,recordSystemAssetPurchase} from '../lib/economy.mjs';
 import {createCompanyLoan,transitionCompanyLoan,repayCompanyLoan,createAcquisition,transitionAcquisition,createContract,createInvoice,createPurchaseOrder} from '../lib/operations.mjs';
-import {groupPeriodReport} from '../lib/group-period-report.mjs';
+import {groupPeriodReport,groupPeriodCloses,closeGroupPeriod} from '../lib/group-period-report.mjs';
 import {startIntangibleSchedule,cancelIntangibleSchedule,processIntangibleSchedules} from '../lib/intangible-schedules.mjs';
 import {settleExternalFacility,adjustAcquiredIntangible,payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
 import {captureGroupAccountHistory,listGroupAccountHistory} from '../lib/group-account-history.mjs';
@@ -326,6 +326,17 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   const absent=(await listGroupAccountHistory(other.id))[0];
   assert.equal(absent.statement.cash,'1200.00');assert.equal(absent.statement.netIncome,'200.00');assert.equal(absent.statement.balanceCheck,'0.00');
   assert.equal(absent.perimeter[0].companyId,absentCompany);
+  const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+  const reviewed=await groupPeriodReport(other.id,yesterday,yesterday);
+  assert.equal(reviewed.pendingEconomicCatchup,0);
+  assert.equal(reviewed.ownershipWarnings.length,0);
+  const closing={start:yesterday,end:yesterday,digest:reviewed.digest,reason:'Reviewed modeled daily financial statements.',confirm:true,operationKey:uid()};
+  const closed=await closeGroupPeriod(other,closing);
+  assert.equal(closed.revision,1);
+  assert.equal((await closeGroupPeriod(other,closing)).id,closed.id);
+  assert.equal((await groupPeriodCloses(other.id,yesterday,yesterday))[0].id,closed.id);
+  assert.equal((await groupPeriodCloses(user.id,yesterday,yesterday)).length,0);
+  await assert.rejects(()=>sql("UPDATE group_period_closes SET reason='tampered' WHERE id=$1",[closed.id]),/immutable|read-only/i);
   assert.equal((await listGroupAccountHistory(user.id))[0].statement.cash,'1100.00');
 
  }finally{
