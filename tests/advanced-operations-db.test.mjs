@@ -99,6 +99,7 @@ test('stock, returns, contractual enforcement and settlement reconcile in Postgr
   await sql("UPDATE dispute_payment_installments SET due_at=now()-interval '1 day' WHERE id=$1",[parts[1].id]);
   await processDisputeDeadlines(u.id);
   const [overdue]=await sql('SELECT overdue_reported_at FROM dispute_payment_installments WHERE id=$1',[parts[1].id]);assert.ok(overdue.overdue_reported_at);
+  await sql('UPDATE dispute_payment_installments SET due_at=$1 WHERE id=$2',[agreement.installments[1].dueAt,parts[1].id]);
   snapshot=await economySnapshot(u.id);assert.equal(snapshot.financialStatements[0].cash,'1000.00');assert.equal(snapshot.financialStatements[0].receivables,'70.00');
   const amendment={agreement:'Renegotiated balance with confirmed customer agreement',operationKey:uid(),expectedRevision:0,installments:[{amount:'35',dueAt:new Date(Date.now()+259200000).toISOString()}]};
   await assert.rejects(()=>reviseDisputePlan(other,plan.id,amendment),/unavailable/);
