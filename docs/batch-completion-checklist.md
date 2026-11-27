@@ -24,10 +24,10 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Disposal of nested controlled groups and of a subsidiary owned by another subsidiary; consolidated closing statements, group gain/loss and NCI/goodwill treatment, internal intercompany elimination and historical cumulative earnings through the disposal date.
 - [x] Buyer assumption of multiple disbursed loan facilities and acquired trade payables; accrued interest through disposal, creditor-by-creditor evidence, preserved loan/payment history and seller-side servicing fences.
 - [x] Multiple named trade creditors within a single acquisition allocation, individual payment histories and disposal transfer evidence.
-- [x] Forward-only immutable daily group-account observations, captured by the world engine and displayed in Corporate Finance; automated integration regression added (verification pending).
+- [x] Forward-only immutable daily group-account observations, captured by the world engine and displayed in Corporate Finance; automated integration regression passed (run 45989742110).
 - [ ] Transfer of external intercompany facilities, contracts, purchase orders, employees and other unresolved operating obligations (currently blocked safely); true period-specific consolidated income reporting; bargain purchases; richer ownership/covenant mechanisms.
-- [x] Approved monthly acquired-intangible schedules, impairment-aware remaining charges, bounded missed-period catch-up, cancellation and manual-charge fencing; CI verification pending.
-- [x] Evidence-backed acquired intangible amortization and impairment, posted as non-cash charges with carrying-value limits, immutable opening allocation, history and reconciliation; CI verification pending.
+- [x] Approved monthly acquired-intangible schedules, impairment-aware remaining charges, bounded missed-period catch-up, cancellation and manual-charge fencing; isolated finance transaction tests passed (run 46000432557), full workflow blocked by backup restore tool mismatch.
+- [x] Evidence-backed acquired intangible amortization and impairment, posted as non-cash charges with carrying-value limits, immutable opening allocation, history and reconciliation; CI passed (run 46000081746).
 - [ ] Final merge and live ledger reconciliation.
 
 ## Batch 3 — Business Operations
@@ -55,7 +55,7 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Renewable meeting worker leases, bounded missing-response retry, stale-worker fencing and bounded audio prefetch.
 - [x] Optional WebRTC streaming microphone with live captions, short-lived transcription credentials, explicit consent, separate local VAD/outbound tracks, ICE gathering gate, abortable teardown and recorded speech fallback. Off by default pending provider acceptance.
 - [x] Automated regression tests for microphone track isolation and WebRTC ICE readiness, timeout and cancellation.
-- [x] Natural clause segmentation, bounded session audio caching, late-arriving speaker prefetch, immediate microphone floor interruption, and first-audio timing display implemented on Batch 5; CI verification pending.
+- [x] Natural clause segmentation, bounded session audio caching, late-arriving speaker prefetch, immediate microphone floor interruption, and first-audio timing display implemented on Batch 5; CI passed (run 45990199787).
 - [ ] Verify live streaming input and low-latency continuous speech-to-speech output, overlapping speech, and real-device echo/latency. Executive synthesis remains segmented; see `meeting-voice-acceptance.md`.
 - [x] Autonomous fictional travel-provider disruption review, alternative booking proposals with manually recorded quotes, approved replacement bookings and fee workflows implemented on Batch 5.
 - [x] Autonomous concierge replacement quote generation from the recorded fictional provider; bounded price and fees, separate Chairman approval.
@@ -82,3 +82,6 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [ ] Close all deferred scope above or explicitly obtain scope approval before declaring the application complete.
 
 - [x] Explicitly reviewed negative opening net assets, signed ownership rounding and consolidation; active acquired-intangible schedules cancelled when control transfers. Added cross-origin private audio protection and hidden-page playback cancellation; verification pending.
+
+- [x] Progressive WAV audio relay and cancellation tests passed (run 46000081746); live provider/device acceptance and full-duplex voice remain outstanding.
+- [x] Corrected SQL concatenation defect in disposal cancellation discovered in run 46000849877; new complete verification required.

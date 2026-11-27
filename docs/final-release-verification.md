@@ -29,3 +29,6 @@ Stop further promotion if an invariant, authorization boundary, migration or req
 Run `npm run engine:health` in the intended environment. It reports aggregate stale worlds, repeat stage errors, worker heartbeat and stale meetings without exposing user IDs or messages. Thresholds (30-minute world delay, 20-minute worker heartbeat, 3 consecutive failures) are initial operational defaults and must be tuned against real load. CI also rehearses a PostgreSQL dump/restore against its isolated fixture database and runs invariant checks before and after; this is not a production Neon recovery rehearsal.
 
 The isolated restore rehearsal uses PostgreSQL 16 client tools matching the service, avoiding PostgreSQL 18-only configuration statements. No production credentials or snapshots are used.
+
+## Mandatory completion gates
+A successful preview build alone is insufficient. The final candidate must pass all CI steps (including backup restoration), all required live acceptance checks, production database isolation and an approved promotion. Record actual results rather than assuming a pass. Unfinished full-duplex audio, period-specific consolidated accounts, bargain-purchase accounting and unresolved operating obligation transfer workflows remain implementation gaps, not merely deployment tasks.
