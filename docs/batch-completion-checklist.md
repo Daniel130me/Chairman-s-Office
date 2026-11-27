@@ -87,3 +87,5 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Corrected SQL concatenation defect in disposal cancellation discovered in run 46000849877; new complete verification required.
 
 - [x] Reviewed bargain purchases with immutable acquisition-date group-only gain, zero goodwill, disposal and impairment floor handling, plus UTC date-range ledger reporting including disposed entities, control-sale and disposal adjustments. Historical NCI allocation and full period-close standards remain outside this implementation. Verification pending.
+
+- [x] Evidence-backed externalization of cross-boundary intercompany facilities on disposal, exact balance and consent fences, active-side-only receipts/payments, idempotent settlement and reconciliation; CI pending. Previously externalized facilities must be settled before another transfer; unresolved contracts/employment and other obligations remain blocked.

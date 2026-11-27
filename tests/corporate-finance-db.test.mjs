@@ -7,7 +7,7 @@ import {economySnapshot,advanceEconomy,recordSystemAssetPurchase} from '../lib/e
 import {createCompanyLoan,transitionCompanyLoan,repayCompanyLoan,createAcquisition,transitionAcquisition} from '../lib/operations.mjs';
 import {groupPeriodReport} from '../lib/group-period-report.mjs';
 import {startIntangibleSchedule,cancelIntangibleSchedule,processIntangibleSchedules} from '../lib/intangible-schedules.mjs';
-import {adjustAcquiredIntangible,payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
+import {settleExternalFacility,adjustAcquiredIntangible,payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
 import {captureGroupAccountHistory,listGroupAccountHistory} from '../lib/group-account-history.mjs';
 const enabled=process.env.RUN_CORPORATE_FINANCE_DB_TESTS==='1';
 test('corporate finance transaction integration on an isolated CI database',{skip:!enabled,timeout:60000},async()=>{
@@ -266,6 +266,34 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(period.bargainGain,'20.00');assert.ok(period.companies.some(c=>c.disposed_at));
   assert.equal((await groupPeriodReport(other.id,utcDay,utcDay)).companies.length,0);
   assert.equal((await groupPeriodReport(other.id,utcDay,utcDay)).bargainGain,'0.00');
+
+  // Cross-boundary facility transfers preserve only the retained entity's servicing.
+  const transferDeal=await createAcquisition(user,{buyerCompanyId:a,targetName:'Facility transfer fixture',targetSector:'Tech',sellerName:'Seller',description:'Transfer with documented continuing finance',purchasePrice:'20',targetValuation:'20',ownershipPercentage:'100',operationKey:uid()});
+  await saveAcquisitionAllocation(user,transferDeal.id,{cash:'10',fixedAssets:'0',intangibles:'0',payables:'0',zeroOpeningLiabilities:true,evidence:'Verified acquired opening cash.'});
+  for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,transferDeal.id,{area,status:'cleared',evidence:'Reviewed facility transfer diligence '+area});
+  await transitionAcquisition(user,transferDeal.id,{status:'approved',reason:'Reviewed'});
+  const transferTarget=await transitionAcquisition(user,transferDeal.id,{status:'completed',reason:'Confirmed'});
+  const transferHolding=(await corporateFinanceSnapshot(user.id)).holdings.find(h=>h.acquisition_id===transferDeal.id);
+  const receive=await advanceIntercompany(user,{lenderCompanyId:a,borrowerCompanyId:transferTarget.target_company_id,amount:'4',purpose:'Continuing receivable',operationKey:uid()});
+  const pay=await advanceIntercompany(user,{lenderCompanyId:transferTarget.target_company_id,borrowerCompanyId:a,amount:'2',purpose:'Continuing payable',operationKey:uid()});
+  const disposalBody={...exit,stakeSold:'100',proceeds:'20',retainedValue:'0',operationKey:uid()};
+  await assert.rejects(()=>disposeSubsidiary(user,transferHolding.id,disposalBody),/every outstanding balance/);
+  const agreements=[receive,pay].map(f=>({facilityId:f.id,outstanding:f.outstanding,evidence:'Signed buyer and retained company agreement confirms exact continuing balance.',confirmed:true}));
+  await assert.rejects(()=>disposeSubsidiary(user,transferHolding.id,{...disposalBody,externalFacilityTransfers:[{...agreements[0],outstanding:'1'},agreements[1]]}),/balance or transfer consent changed/);
+  const sold=await disposeSubsidiary(user,transferHolding.id,{...disposalBody,externalFacilityTransfers:agreements});
+  assert.equal(sold.closing_statement.externalFacilities.length,2);
+  assert.equal((await disposeSubsidiary(user,transferHolding.id,{...disposalBody,externalFacilityTransfers:agreements})).id,sold.id);
+  const receipt={amount:'3',reason:'Confirmed buyer receipt reference.',confirmed:true,operationKey:uid()};
+  await assert.rejects(()=>settleExternalFacility(other,receive.id,receipt),/unavailable/);
+  await assert.rejects(()=>repayIntercompany(user,receive.id,{...receipt}),/transferred/);
+  const settlement=await settleExternalFacility(user,receive.id,receipt);
+  assert.equal((await settleExternalFacility(user,receive.id,receipt)).id,settlement.id);
+  await assert.rejects(()=>settleExternalFacility(user,receive.id,{...receipt,amount:'2',operationKey:uid()}),/exceeds/);
+  await settleExternalFacility(user,pay.id,{amount:'2',reason:'Confirmed external creditor payment.',confirmed:true,operationKey:uid()});
+  const transferSnap=await corporateFinanceSnapshot(user.id);
+  assert.equal(transferSnap.facilities.find(f=>f.id===receive.id).outstanding,'1.00');
+  assert.equal(transferSnap.facilities.find(f=>f.id===pay.id).outstanding,'0.00');
+  assert.equal(transferSnap.group.balanceCheck,'0.00');
 
   // Simulate 72 hours of absence plus the current UTC day using a second tenant.
   // This exercises the real financial catch-up code without waiting three days.
