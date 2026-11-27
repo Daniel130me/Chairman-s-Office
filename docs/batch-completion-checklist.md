@@ -114,3 +114,5 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 
 - [x] Prior network/diagnostics hardening commit 65330aaa117dc8cf2e0ca5693c0328fd7da66a3e passed GitHub Actions runs 46070704981 and 46070698087.
 - [x] Implemented reviewed transfer of open disputes, partial settlements, standstills and competitive sourcing requests as immutable historical records, with exact buyer assumption evidence and no ongoing seller collection. Inconsistent records remain blocked. Added PostgreSQL regressions, archived UI controls, read-only invoice retries and stale installment rejection; verification pending.
+
+- [x] PWA v6: notification expiration rechecked on click, malformed payload fallback, acknowledged existing-window navigation with cold-window fallback, bounded/cancellable reconnect probes, and foreground-aware procurement/settlement polling. Added notification behavior tests. Fresh automated verification and physical-device acceptance remain required.

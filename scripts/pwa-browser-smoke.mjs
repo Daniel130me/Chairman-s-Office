@@ -34,7 +34,7 @@ try{
  failBoot=false;await page.getByRole('button',{name:'Reconnect',exact:true}).click();
  await page.getByText('PWA smoke empire',{exact:true}).waitFor();
  await page.waitForFunction(()=>!!navigator.serviceWorker.controller,{},{timeout:30000});
- await page.waitForFunction(async()=>{const names=await caches.keys();if(!names.includes('chairmans-office-v5'))return false;const cache=await caches.open('chairmans-office-v5');return !!await cache.match('/offline.html');},{},{timeout:30000});
+ await page.waitForFunction(async()=>{const names=await caches.keys();if(!names.includes('chairmans-office-v6'))return false;const cache=await caches.open('chairmans-office-v6');return !!await cache.match('/offline.html');},{},{timeout:30000});
  const box=await page.locator('.phone-screen').boundingBox();assert.ok(box.width<=390.5&&box.height<=844.5);
  await context.setOffline(true);await page.getByText('Offline · previously loaded records only',{exact:false}).waitFor();
  await page.getByText('PWA smoke empire',{exact:true}).waitFor();
@@ -44,7 +44,7 @@ try{
  await page.waitForFunction(()=>{const body=document.body.innerText;return body.includes('Your office is temporarily unreachable.')||(body.includes('OFFICE CONNECTION')&&body.includes('Reconnect before sending requests.'));},{},{timeout:20000}).catch(async()=>{const details=await page.evaluate(()=>({online:navigator.onLine,controlled:!!navigator.serviceWorker.controller,url:location.href,ready:document.readyState}));throw new Error('Cold offline navigation did not show a safe connection screen. '+JSON.stringify(details)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
  const coldOfflineBody=await page.locator('body').innerText();
  assert.ok(!coldOfflineBody.includes('PWA smoke empire'),'Private world data must not survive a cold offline navigation.');
- const offlineShell=await page.evaluate(async()=>{const cache=await caches.open('chairmans-office-v5');const response=await cache.match('/offline.html');return response?await response.text():'';});
+ const offlineShell=await page.evaluate(async()=>{const cache=await caches.open('chairmans-office-v6');const response=await cache.match('/offline.html');return response?await response.text():'';});
  assert.ok(offlineShell.includes('Your office is temporarily unreachable.'),'Public offline document must be present in the service-worker cache.');
  await context.setOffline(false);
  const retry=page.getByRole('button',{name:/Try again|Reconnect/});
