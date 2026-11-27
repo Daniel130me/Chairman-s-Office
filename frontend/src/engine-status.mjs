@@ -1,7 +1,7 @@
 export function normalizeEngineStatus(value){
  if(!value||typeof value!=='object'||!value.engine||typeof value.engine!=='object'||!value.world||typeof value.world!=='object'||!value.external||typeof value.external!=='object')return null;
- const finite=value=>Number.isFinite(Number(value))?Number(value):null;
- const timestamp=value=>typeof value==='string'&&value.trim()?value:null;
+ const finite=value=>value!==null&&value!==undefined&&value!==''&&typeof value!=='boolean'&&Number.isFinite(Number(value))?Number(value):null;
+ const timestamp=value=>typeof value==='string'&&value.trim()&&Number.isFinite(Date.parse(value))?value:null;
  const stages=Array.isArray(value.stages)?value.stages.filter(x=>x&&typeof x==='object').map(x=>({
   stage:typeof x.stage==='string'?x.stage:'unknown',
   consecutive_failures:finite(x.consecutive_failures)??0,

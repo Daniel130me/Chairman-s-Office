@@ -108,3 +108,6 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 
 - [x] Evidence-backed contractual standstill/suspension with a review deadline, automatic expiry alert without forced termination, deadline pausing, and evidence-backed resumption. Outstanding obligation and milestone deadlines are extended by the actual suspended duration. Verification pending.
 - [x] External intelligence changes are grouped into one privacy-safe push per refresh rather than notifying separately for every changed indicator. Verification pending.
+
+- [x] Latest pre-hardening integration commit `e3b117f795230b31722ae9c4132131b210ba6b85`: GitHub Actions run 46030970211 succeeded, including migration, finance/operations/executive DB regressions, invariant checks, isolated PostgreSQL backup/restore, production build and Chromium PWA lifecycle smoke. This does not establish live device/provider or production acceptance.
+- [x] Final autonomous contact hardening: transaction-scoped owning-world lock, stale provider attempt fencing, rechecked capacity and active-company ownership, and real PostgreSQL concurrent retry/tenant-isolation regression. Engine health safely handles uninitialized database timestamps and missing revisions; revision 25 hands off old workers. Fresh CI and live acceptance required.

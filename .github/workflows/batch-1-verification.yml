@@ -52,6 +52,8 @@ jobs:
         run: RUN_ADVANCED_OPERATIONS_DB_TESTS=1 node --test tests/advanced-operations-db.test.mjs
       - name: Executive experience database transactions
         run: RUN_EXECUTIVE_EXPERIENCE_DB_TESTS=1 node --test tests/executive-experience-db.test.mjs
+      - name: Autonomous network introduction database transactions
+        run: RUN_NETWORK_INTRO_DB_TESTS=1 node --test tests/network-introductions-db.test.mjs
       - name: Read-only invariant checks
         run: npm run db:reconcile
       - name: Verify backup and restore on isolated CI database
