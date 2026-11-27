@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {api} from './api.js';
+import {createMeetingAudioTracks} from './meeting-audio-tracks.js';
 // The peer carries live microphone audio to the transcription provider. The
 // durable meeting engine remains the only source of executive responses.
 export function useRealtimeMeetingMic({meetingId,onStartSpeaking,onTranscript,onError}){
@@ -23,9 +24,7 @@ export function useRealtimeMeetingMic({meetingId,onStartSpeaking,onTranscript,on
    s.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
    if(!live()){s.stream.getTracks().forEach(t=>t.stop());return;}
    const track=s.stream.getAudioTracks()[0];track.onended=()=>fail('Streaming microphone disconnected.');
-   // Keep the local monitor track enabled for VAD. Only the cloned network
-   // track is muted before connection and between committed utterances.
-   s.peerTrack=track.clone();s.peerTrack.enabled=false;s.peerTrack.onended=()=>fail('Streaming microphone track disconnected.');
+   const tracks=createMeetingAudioTracks(track);s.peerTrack=tracks.sendTrack;s.peerTrack.onended=()=>fail('Streaming microphone track disconnected.');
    const AudioCtx=window.AudioContext||window.webkitAudioContext;s.context=new AudioCtx();await s.context.resume();
    if(!live())return;
    const analyser=s.context.createAnalyser();analyser.fftSize=1024;s.context.createMediaStreamSource(s.stream).connect(analyser);
