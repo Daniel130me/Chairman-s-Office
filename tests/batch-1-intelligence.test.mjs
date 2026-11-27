@@ -60,3 +60,10 @@ test('interview statements distinguish memory from lack of knowledge',()=>{
  assert.equal(parseInterviewStatement({statement:'I do not have first-hand information.',knowledgeBasis:'not-aware',confidence:0.2}).knowledgeBasis,'not-aware');
  assert.equal(parseInterviewStatement({statement:'I know everything.',knowledgeBasis:'not-aware',confidence:0.9}),null);
 });
+
+
+test('malformed provider memory entries are rejected instead of throwing',()=>{
+ for(const invalid of [null,[],true,17,'invalid']){
+  assert.equal(parseMemoryExtraction({memories:[invalid]}),null);
+ }
+});
