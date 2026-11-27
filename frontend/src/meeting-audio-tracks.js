@@ -6,3 +6,13 @@ export function createMeetingAudioTracks(microphoneTrack){
  sendTrack.enabled=false;
  return {monitorTrack:microphoneTrack,sendTrack};
 }
+
+export function waitForIceGathering(peer,timeoutMs=10000){
+ if(peer.iceGatheringState==='complete')return Promise.resolve();
+ return new Promise((resolve,reject)=>{
+  const cleanup=()=>{clearTimeout(timer);peer.removeEventListener('icegatheringstatechange',changed);};
+  const changed=()=>{if(peer.iceGatheringState==='complete'){cleanup();resolve();}};
+  const timer=setTimeout(()=>{cleanup();reject(new Error('Network route discovery timed out.'));},timeoutMs);
+  peer.addEventListener('icegatheringstatechange',changed);changed();
+ });
+}
