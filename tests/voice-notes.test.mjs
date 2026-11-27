@@ -9,7 +9,10 @@ test('recordings accept only approved audio containers and bounded size',()=>{
  assert.equal(validAudio(wav,'audio/webm'),false);
  assert.equal(validAudio(Buffer.alloc(MAX_AUDIO_BYTES+1),'audio/wav'),false);
 });
-test('synthetic voice assignment is stable and respects a supported explicit voice',()=>{
- assert.equal(voiceForContact('character-1','hannah'),'hannah');
+test('synthetic voice assignment is stable, gender-aware and respects an explicit voice',()=>{
+ assert.equal(voiceForContact('character-1','hannah','Daniella','Chief of Staff'),'hannah');
+ assert.equal(voiceForContact('character-1',null,'Daniella','Chief of Staff'),'autumn');
+ assert.ok(['autumn','diana','hannah'].includes(voiceForContact('character-2',null,'Nadia Mensah','Chief Operating Officer')));
+ assert.ok(['austin','daniel','troy'].includes(voiceForContact('character-3',null,'Victor Sloane','CEO')));
  assert.equal(voiceForContact('character-1'),voiceForContact('character-1'));
 });

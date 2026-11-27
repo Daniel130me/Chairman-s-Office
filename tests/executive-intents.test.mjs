@@ -20,6 +20,12 @@ test('keeps the requested colleague when a delegated call has a delay',()=>{
   });
 });
 
+test('recognises common typing and speech transcription variants for immediate callbacks',()=>{
+  assert.deepEqual(parseCallIntent('Cal me now!'),{recipient:null,delaySeconds:0,kind:'assistant-callback'});
+  assert.deepEqual(parseCallIntent('Hello, call me now.'),{recipient:null,delaySeconds:0,kind:'assistant-callback'});
+  assert.deepEqual(parseCallIntent('Please call me back immediately.'),{recipient:null,delaySeconds:0,kind:'assistant-callback'});
+});
+
 test('allows an explicitly immediate callback',()=>{
   assert.deepEqual(parseCallIntent('Please call me back right now.'),{
     recipient:null,delaySeconds:0,kind:'assistant-callback'

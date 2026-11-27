@@ -142,3 +142,10 @@ Implementation present on development branch; acceptance checkboxes above delibe
 - Loan schedules and accrued interest: earlier implementation covers installments and overdue notices. Refinancing, collateral and covenants remain.
 - Validation: 11 new tables, 20 validated CHECK constraints, refund fixture balanced, 17 direct rule assertions, 15 backend source syntax checks. Regression tests committed; full CI, JSX build, authenticated end-to-end behavior, cross-tenant and multi-device testing still unverified.
 - Blocker: preview build-rate limit. Latest source has not been deployed and the durable workflow revision must be activated on a new validated preview. Production remains untouched. Do not mark complete until all acceptance gates pass.
+
+
+## Callback and voicemail reliability — 28 November 2026
+- [x] Typed chat and transcribed voice notes share one idempotent callback action path; common “Cal me now” typo is recognised; assistant confirmations are emitted only after the in-app invitation or scheduled job is successfully created.
+- [x] Missed-call and colleague voicemail prompts explicitly define caller and recipient roles; reject self-greetings, wrong speaker identity and fabricated phone numbers; use a grounded safe fallback when model output is invalid.
+- [x] Synthetic voicemail voice assignment respects explicit character voice preferences and uses gender-aware Orpheus voice mapping; the Chief of Staff voice is female and professionally directed.
+- [ ] Re-issue or archive historical misaddressed voicemail audio; verify new audio quality with the Chairman on Android/iPhone; verify foreground/background call delivery and notification registration.

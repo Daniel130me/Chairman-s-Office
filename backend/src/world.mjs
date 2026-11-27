@@ -3,9 +3,9 @@ import {mergeTranscript} from '../../lib/executive-experience-rules.mjs';
 
 import {sql,one,transaction,uid,iso} from './db.mjs';
 import {ask} from './ai.mjs';
-import {parseCallIntent} from '../../lib/executive-intents.mjs';
+import {handleCallIntent} from '../../lib/executive-call-intent.mjs';
 import {normalizeMailSubject,replyMailSubject} from '../../lib/mail-rules.mjs';
-import {scheduleExecutiveCall} from '../../lib/call-workflow.mjs';
+
 import {createVapiActionToken} from '../../lib/vapi-action-token.mjs';
 import {economySnapshot} from '../../lib/economy.mjs';
 import {boardSnapshot} from '../../lib/board-governance.mjs';
@@ -136,36 +136,10 @@ export async function message(user,contactId,body,channel='chat',sourceCallId=nu
   await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,source_call_id,subject) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[outgoingId,user.id,w.id,c.id,'outgoing',sourceCallId?'missed-call':channel,body,sourceCallId,mailSubject]);
   if(sourceCallId&&c.availability&&c.availability!=='available')return {reply:null,delivery:'saved-no-reply'};
   const history=(await sql('SELECT direction,body FROM messages WHERE user_id=$1 AND contact_id=$2 ORDER BY created_at DESC LIMIT 12',[user.id,c.id])).reverse();
-  const intent=parseCallIntent(body);
+  const callAction=await handleCallIntent({userId:user.id,worldId:w.id,defaultContactId:c.id,text:body,actionKey:'message:'+outgoingId});
   let reply;
-
-  if(intent?.clarification){
-    reply=intent.clarification;
-  }else if(intent){
-    try{
-      const action=await scheduleExecutiveCall({
-        userId:user.id,
-        worldId:w.id,
-        recipient:intent.recipient,
-        defaultContactId:c.id,
-        delaySeconds:intent.delaySeconds,
-        kind:intent.kind,
-        reason:body
-      });
-      if(intent.kind==='assistant-callback'){
-        const delay=action.delaySeconds;
-        const when=delay<60?delay+' seconds':delay%60===0?(delay/60)+' minutes':Math.floor(delay/60)+' minutes and '+(delay%60)+' seconds';
-        reply='Of course, Chairman. I have scheduled my callback for '+when+'. It will arrive on your executive line.';
-      }else if(action.delaySeconds===0){
-        reply='Certainly, Chairman. I have asked '+action.contact.name+', our '+action.contact.title+', to call you. Their incoming call will appear on your executive line once this conversation ends.';
-      }else{
-        const delay=action.delaySeconds;
-        const when=delay<60?delay+' seconds':delay%60===0?(delay/60)+' minutes':Math.floor(delay/60)+' minutes and '+(delay%60)+' seconds';
-        reply='Certainly, Chairman. I have arranged for '+action.contact.name+', our '+action.contact.title+', to call you in '+when+'.';
-      }
-    }catch(error){
-      reply='I could not arrange that call just now. '+String(error?.message||'Please try again.');
-    }
+  if(callAction){
+    reply=callAction.reply;
   }else{
     const proposed=await classifyBusinessAction(user,c,body,'message:'+outgoingId).catch(error=>{console.warn('Business action classification deferred',error.name||'error');return null;});
     if(proposed?.clarification)reply=proposed.clarification;
