@@ -101,3 +101,5 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Documented buyer assumption of active employment, draft/active contracts, outstanding invoices and open purchase orders on loss of control; exact preflight digest, explicit consent, archived underlying records, external employee contact relationships, seller automation fences. Open disputes, active settlement plans, open RFQs and remaining non-transferable obligations still require resolution. Verification pending.
 
 - [x] Additional minimum net-assets and maximum net-debt lending covenants, including replacement financing, monitored against recorded accounts. Contractual cure/re-performance plans with explicit consent, evidence, deadlines, breach escalation and suspension of collection until resolution. Verification pending.
+
+- [x] Optional automatic bounded executive debate and recorded short interjection style with experimental overlapping playback; existing durable voice/meeting source-of-truth and Chairman floor controls retained. Automated verification and actual provider/device acceptance pending; not full-duplex model-native speech-to-speech.

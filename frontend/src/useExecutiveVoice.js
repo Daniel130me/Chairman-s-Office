@@ -1,15 +1,16 @@
 import {useEffect,useRef,useState} from 'react';
+import {overlapCandidate,startBriefOverlap} from './meeting-overlap.mjs';
 import {speechChunks} from '../../lib/executive-experience-rules.mjs';
 import {createVoiceAudioCache,nextVoiceSegment} from './meeting-playback-cache.js';
-export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onPlayback,progressiveAudio=false}){
- const queue=useRef([]),seen=useRef(new Set()),running=useRef(false),generation=useRef(0),audio=useRef(null),settle=useRef(null),suppressed=useRef(new Set()),requests=useRef(new Map()),config=useRef({}),cache=useRef(null),playingSegment=useRef(null);
+export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onPlayback,progressiveAudio=false,overlapEnabled=false}){
+ const queue=useRef([]),seen=useRef(new Set()),running=useRef(false),generation=useRef(0),audio=useRef(null),settle=useRef(null),suppressed=useRef(new Set()),requests=useRef(new Map()),config=useRef({}),cache=useRef(null),playingSegment=useRef(null),overlap=useRef(null);
  if(!cache.current)cache.current=createVoiceAudioCache();
- const [speaker,setSpeaker]=useState(null),[mode,setMode]=useState('idle');
- config.current={members,enabled,paused,notify,onPlayback,progressiveAudio};
+ const [speaker,setSpeaker]=useState(null),[mode,setMode]=useState('idle'),[overlapSpeaker,setOverlapSpeaker]=useState(null);
+ config.current={members,enabled,paused,notify,onPlayback,progressiveAudio,overlapEnabled};
  const playable=()=>config.current.enabled&&!config.current.paused&&!document.hidden;
  function cancelRequests(){for(const entry of requests.current.values())entry.controller.abort();requests.current.clear();}
  function stop(clear=true){
-  generation.current++;playingSegment.current=null;if(clear)queue.current=[];cancelRequests();audio.current?.pause();settle.current?.();settle.current=null;
+  generation.current++;playingSegment.current=null;overlap.current?.cancel();overlap.current=null;setOverlapSpeaker(null);if(clear)queue.current=[];cancelRequests();audio.current?.pause();settle.current?.();settle.current=null;
   window.speechSynthesis?.cancel();running.current=false;setSpeaker(null);setMode('idle');
  }
  function skip(){stop();}
@@ -41,13 +42,26 @@ export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onP
    timer=setTimeout(()=>{window.speechSynthesis.cancel();done(false);},45000);window.speechSynthesis.speak(u);
   });
  }
- async function playBuffer(blob,onStart){
-  const url=URL.createObjectURL(blob),a=new Audio(url);audio.current=a;
-  try{return await new Promise(resolve=>{let timer,finished=false;
+ async function playBuffer(blob,onStart,segment){
+  const url=URL.createObjectURL(blob),a=new Audio(url);audio.current=a;let monitor,secondary=null,attempted=false,secondaryTurn=null;
+  const token=generation.current;
+  function maybeOverlap(){
+   if(attempted||!config.current.overlapEnabled||!playable()||generation.current!==token||a.paused)return;
+   const next=overlapCandidate(segment?.turn,segment?.index,segment?.count,queue.current[0],a.duration-a.currentTime);
+   if(!next||suppressed.current.has(next.round_id)||speechChunks(next.message).length!==1)return;
+   const cached=cache.current.get(next.id+':0');if(!cached)return;
+   attempted=true;secondaryTurn=next;
+   secondary=startBriefOverlap(cached,{onAudible:()=>{
+    if(generation.current!==token||!playable()||queue.current[0]?.id!==next.id)return false;
+    queue.current.shift();setOverlapSpeaker(next.contact_id);config.current.onPlayback?.(next);return true;
+   }});overlap.current=secondary;
+   void secondary.done.then(result=>{if(overlap.current===secondary){overlap.current=null;setOverlapSpeaker(null);}if(!result.ok&&result.audible&&generation.current===token&&playable())config.current.notify?.('Interjection audio was interrupted; the saved statement can be replayed.');});
+  }
+  try{const result=await new Promise(resolve=>{let timer,finished=false;
    const done=ok=>{if(finished)return;finished=true;clearTimeout(timer);if(settle.current===cancel)settle.current=null;resolve(ok);};
-   const cancel=()=>done(false);settle.current=cancel;a.onplaying=onStart;a.onended=()=>done(true);a.onerror=()=>done(false);
+   const cancel=()=>done(false);settle.current=cancel;a.onplaying=()=>{onStart();if(segment&&config.current.overlapEnabled&&!monitor)monitor=setInterval(maybeOverlap,50);};a.onended=()=>done(true);a.onerror=()=>done(false);
    timer=setTimeout(()=>{a.pause();done(false);},45000);a.play().catch(()=>done(false));
-  });}finally{a.pause();URL.revokeObjectURL(url);if(audio.current===a)audio.current=null;}
+  });clearInterval(monitor);if(secondary){if(!result||generation.current!==token)secondary.cancel();else{if(secondaryTurn&&overlap.current===secondary)setSpeaker(secondaryTurn.contact_id);await secondary.done;}}return result;}finally{clearInterval(monitor);a.pause();URL.revokeObjectURL(url);if(audio.current===a)audio.current=null;}
  }
  async function playProgressive(turn,index,onStart){
   const a=new Audio();audio.current=a;let audible=false;
@@ -72,7 +86,7 @@ export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onP
     for(let i=0;i<chunks.length&&playable()&&generation.current===token;i++){
      if(!useLocal){
       const key=t.id+':'+i;
-      if(config.current.progressiveAudio&&!cache.current.get(key)&&!requests.current.has(key)&&!t.replay){
+      if(config.current.progressiveAudio&&!(config.current.overlapEnabled&&i===chunks.length-1)&&!cache.current.get(key)&&!requests.current.has(key)&&!t.replay){
        playingSegment.current={turn:t,index:i,count:chunks.length};
        setMode('loading');
        const result=await playProgressive(t,i,()=>{if(generation.current===token&&playable()){setMode('provider');audible();prefetchNext();}});
@@ -87,7 +101,7 @@ export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onP
       if(blob){
        // Prefetch the next segment, including a new speaker arriving during playback.
        playingSegment.current={turn:t,index:i,count:chunks.length};prefetchNext();
-       setMode('provider');const played=await playBuffer(blob,audible);
+       setMode('provider');const played=await playBuffer(blob,audible,{turn:t,index:i,count:chunks.length});
        if(generation.current===token)playingSegment.current=null;
        if(generation.current!==token||!playable())break;
        if(played)continue;
@@ -112,6 +126,6 @@ export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onP
   for(const t of turns){if(seen.current.has(t.id))continue;seen.current.add(t.id);if(t.contact_id&&!suppressed.current.has(t.round_id))queue.current.push(t);}
   prefetchNext();void drain();
  },[turns,enabled,paused]);
- useEffect(()=>()=>{generation.current++;queue.current=[];playingSegment.current=null;cancelRequests();cache.current.clear();audio.current?.pause();settle.current?.();window.speechSynthesis?.cancel();},[]);
- return {speaker,mode,skip,replay,markHistory,suppressRound};
+ useEffect(()=>()=>{generation.current++;queue.current=[];playingSegment.current=null;overlap.current?.cancel();overlap.current=null;cancelRequests();cache.current.clear();audio.current?.pause();settle.current?.();window.speechSynthesis?.cancel();},[]);
+ return {speaker,overlapSpeaker,mode,hasPending:()=>running.current||queue.current.length>0,skip,replay,markHistory,suppressRound};
 }
