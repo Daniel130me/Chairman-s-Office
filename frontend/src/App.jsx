@@ -428,7 +428,7 @@ function Meeting({m,state,onBack,onChange,notify}){
  const chatEndRef=useRef(),active=useRef(true),recognizer=useRef(null),speakingLock=useRef(false),roundRef=useRef(null),pollToken=useRef(0),retryRef=useRef(null);const [listening,setListening]=useState(false);
  const members=state.contacts.filter(c=>m.attendees.includes(c.id));
  const [directed,setDirected]=useState(''),[currentRound,setCurrentRound]=useState(null),[retryText,setRetryText]=useState(''),[recoverable,setRecoverable]=useState(null);
- const [streamingAvailable,setStreamingAvailable]=useState(false),[audioLatency,setAudioLatency]=useState(null);
+ const [streamingAvailable,setStreamingAvailable]=useState(false),[progressiveAudio,setProgressiveAudio]=useState(false),[audioLatency,setAudioLatency]=useState(null);
  const micInterruption=useRef(null),latencyRound=useRef(null);
  const onMicStart=()=>{voice.skip();micInterruption.current=takeFloor();};
  const onMicText=async message=>{await micInterruption.current;micInterruption.current=null;if(!active.current||ended)return;if(speakingLock.current){setText(message);notify('Your remark is retained. Tap Speak to submit it when the current request finishes.');return;}await speak(message,true);};
@@ -436,8 +436,8 @@ function Meeting({m,state,onBack,onChange,notify}){
  const mic=useMeetingMic({meetingId:m.id,onStartSpeaking:onMicStart,onTranscript:onMicText,onError:notify});
  const streamMic=useRealtimeMeetingMic({meetingId:m.id,onStartSpeaking:onMicStart,onTranscript:onMicText,onError:notify});
  const micActive=mic.active||streamMic.active,micCapturing=mic.capturing||streamMic.capturing;
- useEffect(()=>{let live=true;api('/meeting-voice/config').then(r=>{if(live)setStreamingAvailable(r.streaming===true);}).catch(()=>{});return()=>{live=false;};},[m.id]);
- const voice=useExecutiveVoice({turns,members,enabled:voiceEnabled,paused:micCapturing||listening,notify,onPlayback:recordAudioLatency});
+ useEffect(()=>{let live=true;api('/meeting-voice/config').then(r=>{if(live){setStreamingAvailable(r.streaming===true);setProgressiveAudio(r.progressiveAudio===true);}}).catch(()=>{});return()=>{live=false;};},[m.id]);
+ const voice=useExecutiveVoice({turns,members,enabled:voiceEnabled,paused:micCapturing||listening,notify,onPlayback:recordAudioLatency,progressiveAudio});
  const [motionTitle,setMotionTitle]=useState(''),[motionText,setMotionText]=useState(''),[motionKey,setMotionKey]=useState(()=>crypto.randomUUID()),[motionBusy,setMotionBusy]=useState(false);
  async function createMotion(e){e.preventDefault();setMotionBusy(true);try{await api('/meetings/'+m.id+'/motions',{method:'POST',body:{title:motionTitle,proposal:motionText,operationKey:motionKey}});setMotionTitle('');setMotionText('');setMotionKey(crypto.randomUUID());await onChange();notify('Advisory vote opened. Executives will vote independently.');}catch(e){notify(e.message)}finally{setMotionBusy(false)}}
  async function decideMotion(motion,decision){const reason=window.prompt('Reason for final decision:');if(!reason?.trim())return;setMotionBusy(true);try{await api('/board-motions/'+motion.id+'/decide',{method:'POST',body:{decision,reason}});await onChange();notify('Board resolution recorded.');}catch(e){notify(e.message)}finally{setMotionBusy(false)}}

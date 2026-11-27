@@ -28,3 +28,6 @@ Provider references:
 7. Conclude the meeting and compare minutes against recorded statements, including interrupted discussions and explicit resolutions.
 
 True full-duplex speech-to-speech output, overlapping participant audio and device-specific echo behavior remain unverified. Do not claim release acceptance without measuring them.
+
+## Optional progressive executive audio
+Set `MEETING_PROGRESSIVE_AUDIO=1` only in an isolated preview with the existing Groq key. Authenticated audio playback relays validated, bounded WAV bytes without waiting for the entire response; the browser uses its native media pipeline. The provider or browser may still buffer. Playback falls back to device speech if no audio began; if audio has already started, the saved statement remains available for replay rather than repeating a partial statement. Test first audible sound, interruption cancellation, browser compatibility and provider buffering with the flag on and off. This is not full-duplex speech-to-speech or overlapping voices.

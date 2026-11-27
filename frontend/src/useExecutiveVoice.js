@@ -1,11 +1,11 @@
 import {useEffect,useRef,useState} from 'react';
 import {speechChunks} from '../../lib/executive-experience-rules.mjs';
 import {createVoiceAudioCache,nextVoiceSegment} from './meeting-playback-cache.js';
-export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onPlayback}){
+export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onPlayback,progressiveAudio=false}){
  const queue=useRef([]),seen=useRef(new Set()),running=useRef(false),generation=useRef(0),audio=useRef(null),settle=useRef(null),suppressed=useRef(new Set()),requests=useRef(new Map()),config=useRef({}),cache=useRef(null),playingSegment=useRef(null);
  if(!cache.current)cache.current=createVoiceAudioCache();
  const [speaker,setSpeaker]=useState(null),[mode,setMode]=useState('idle');
- config.current={members,enabled,paused,notify,onPlayback};
+ config.current={members,enabled,paused,notify,onPlayback,progressiveAudio};
  const playable=()=>config.current.enabled&&!config.current.paused;
  function cancelRequests(){for(const entry of requests.current.values())entry.controller.abort();requests.current.clear();}
  function stop(clear=true){
@@ -49,6 +49,18 @@ export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onP
    timer=setTimeout(()=>{a.pause();done(false);},45000);a.play().catch(()=>done(false));
   });}finally{a.pause();URL.revokeObjectURL(url);if(audio.current===a)audio.current=null;}
  }
+ async function playProgressive(turn,index,onStart){
+  const a=new Audio();audio.current=a;let audible=false;
+  a.preload='auto';a.src='/api/meeting-voice/'+encodeURIComponent(turn.id)+'/'+index+'?progressive=1';
+  try{return await new Promise(resolve=>{
+   let timer,finished=false;
+   const done=ok=>{if(finished)return;finished=true;clearTimeout(timer);if(settle.current===cancel)settle.current=null;resolve({ok,audible});};
+   const cancel=()=>done(false);settle.current=cancel;
+   a.onplaying=()=>{if(!audible){audible=true;clearTimeout(timer);timer=setTimeout(()=>done(false),45000);onStart();}};
+   a.onended=()=>done(true);a.onerror=()=>done(false);
+   timer=setTimeout(()=>done(false),10000);a.play().catch(()=>done(false));
+  });}finally{a.onplaying=null;a.onended=null;a.onerror=null;a.pause();a.removeAttribute('src');a.load();if(audio.current===a)audio.current=null;}
+ }
  async function drain(){
   if(running.current||!playable())return;running.current=true;const token=generation.current;
   try{
@@ -59,7 +71,18 @@ export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onP
     const audible=()=>{if(!started&&generation.current===token&&playable()){started=true;if(!t.replay)config.current.onPlayback?.(t);}};
     for(let i=0;i<chunks.length&&playable()&&generation.current===token;i++){
      if(!useLocal){
-      setMode('loading');const blob=await load(t,i);
+      const key=t.id+':'+i;
+      if(config.current.progressiveAudio&&!cache.current.get(key)&&!requests.current.has(key)&&!t.replay){
+       playingSegment.current={turn:t,index:i,count:chunks.length};
+       setMode('loading');
+       const result=await playProgressive(t,i,()=>{if(generation.current===token&&playable()){setMode('provider');audible();prefetchNext();}});
+       if(generation.current===token)playingSegment.current=null;
+       if(generation.current!==token||!playable())break;
+       if(result.ok)continue;
+       if(result.audible){config.current.notify?.('Executive audio was interrupted. The complete statement is saved; use Replay voice to hear it again.');break;}
+       useLocal=true;cancelRequests();
+      }
+      setMode('loading');const blob=useLocal?null:await load(t,i);
       if(generation.current!==token||!playable())break;
       if(blob){
        // Prefetch the next segment, including a new speaker arriving during playback.
