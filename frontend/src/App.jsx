@@ -428,7 +428,7 @@ function Meeting({m,state,onBack,onChange,notify}){
  const members=state.contacts.filter(c=>m.attendees.includes(c.id));
  const [directed,setDirected]=useState(''),[currentRound,setCurrentRound]=useState(null),[retryText,setRetryText]=useState('');
  const mic=useMeetingMic({meetingId:m.id,onStartSpeaking:()=>voice.skip(),onTranscript:async message=>{if(!ended)await speak(message,true);},onError:notify});
- const voice=useExecutiveVoice({turns,members,enabled:voiceEnabled&&!mic.capturing,notify});
+ const voice=useExecutiveVoice({turns,members,enabled:voiceEnabled,paused:mic.capturing||listening,notify});
  const [motionTitle,setMotionTitle]=useState(''),[motionText,setMotionText]=useState(''),[motionKey,setMotionKey]=useState(()=>crypto.randomUUID()),[motionBusy,setMotionBusy]=useState(false);
  async function createMotion(e){e.preventDefault();setMotionBusy(true);try{await api('/meetings/'+m.id+'/motions',{method:'POST',body:{title:motionTitle,proposal:motionText,operationKey:motionKey}});setMotionTitle('');setMotionText('');setMotionKey(crypto.randomUUID());await onChange();notify('Advisory vote opened. Executives will vote independently.');}catch(e){notify(e.message)}finally{setMotionBusy(false)}}
  async function decideMotion(motion,decision){const reason=window.prompt('Reason for final decision:');if(!reason?.trim())return;setMotionBusy(true);try{await api('/board-motions/'+motion.id+'/decide',{method:'POST',body:{decision,reason}});await onChange();notify('Board resolution recorded.');}catch(e){notify(e.message)}finally{setMotionBusy(false)}}
