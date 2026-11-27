@@ -37,14 +37,12 @@ try{
  const box=await page.locator('.phone-screen').boundingBox();assert.ok(box.width<=390.5&&box.height<=844.5);
  await context.setOffline(true);await page.getByText('Offline · previously loaded records only',{exact:false}).waitFor();
  await page.getByText('PWA smoke empire',{exact:true}).waitFor();
- await page.reload({waitUntil:'domcontentloaded'}).catch(()=>null);
+ // Use a real navigation (rather than browser reload) so the service worker must
+ // return its public offline document when the network request cannot complete.
+ await page.goto(base+'/?app=settings',{waitUntil:'domcontentloaded'}).catch(()=>null);
+ await page.getByText('Your office is temporarily unreachable.',{exact:false}).waitFor().catch(async()=>{const details=await page.evaluate(()=>({online:navigator.onLine,controlled:!!navigator.serviceWorker.controller,url:location.href,ready:document.readyState}));throw new Error('Service worker did not serve the public offline shell. '+JSON.stringify(details)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
  const coldOfflineBody=await page.locator('body').innerText();
- const safeOffline=coldOfflineBody.includes('Your office is temporarily unreachable.')||(coldOfflineBody.includes('OFFICE CONNECTION')&&coldOfflineBody.includes('Reconnect before sending requests.'));
- assert.ok(safeOffline,'Cold offline navigation must show a safe connection screen. Body: '+coldOfflineBody.slice(0,1000));
- assert.ok(!coldOfflineBody.includes('PWA smoke empire'),'Private world data must not survive a cold offline reload.');
- // Verify the explicit public offline shell is also available from the service-worker cache.
- await page.goto(base+'/offline.html',{waitUntil:'domcontentloaded'}).catch(()=>null);
- await page.getByText('Your office is temporarily unreachable.',{exact:false}).waitFor();
+ assert.ok(!coldOfflineBody.includes('PWA smoke empire'),'Private world data must not survive a cold offline navigation.');
  await context.setOffline(false);
  const retry=page.getByRole('button',{name:'Try again',exact:true});
  if(await retry.isVisible().catch(()=>false))await retry.click();
