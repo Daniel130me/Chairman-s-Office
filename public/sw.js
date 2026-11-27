@@ -10,9 +10,15 @@ const offline=async()=>{const cache=await caches.open(CACHE);return await cache.
 self.addEventListener('fetch',event=>{
  const url=new URL(event.request.url);
  if(event.request.method!=='GET'||url.origin!==self.location.origin)return;
- // Private API, auth, media and HTML are always network-only.
+ // HTML and private endpoints are network-only. Reuse the original navigation Request so
+ // Chromium/Next receive the browser's real navigation headers and document semantics.
  if(event.request.mode==='navigate'){
-  event.respondWith((async()=>{if(self.navigator.onLine===false)return offline();try{const response=await fetch(event.request.url,{cache:'no-store',credentials:'same-origin',headers:{accept:'text/html'}});return [502,503,504].includes(response.status)?offline():response;}catch{return offline();}})());return;
+  event.respondWith((async()=>{
+   try{
+    const response=await fetch(event.request,{cache:'no-store'});
+    return [502,503,504].includes(response.status)?offline():response;
+   }catch{return offline();}
+  })());return;
  }
  if(!url.pathname.startsWith('/_next/static/')&&!PUBLIC_SHELL.includes(url.pathname))return;
  event.respondWith(caches.open(CACHE).then(async cache=>{const cached=await cache.match(event.request);if(cached)return cached;const response=await fetch(event.request);if(response.ok&&response.type==='basic'&&!/private|no-store/i.test(response.headers.get('Cache-Control')||''))try{await cache.put(event.request,response.clone());}catch{}return response;}).catch(()=>fetch(event.request)));

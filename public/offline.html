@@ -10,13 +10,22 @@ async function retry(){
  for(let attempt=0;attempt<12;attempt++){
   if(!navigator.onLine){reconnecting=false;check();return;}
   try{
-   const response=await fetch('/?offline-probe='+Date.now(),{cache:'no-store',credentials:'same-origin'});
-   if(response.ok){location.reload();return;}
+   // This URL is deliberately not part of the public cache allow-list: it must reach
+   // the application server rather than succeeding from a stale offline shell.
+   const probe=new URL('/',location.origin);probe.searchParams.set('offline-probe',String(Date.now()));
+   const response=await fetch(probe.href,{cache:'no-store',credentials:'same-origin',headers:{'X-CO-Reconnect-Probe':'1'}});
+   if(response.ok){
+    const current=new URL(location.href);
+    if(current.pathname==='/offline.html')current.pathname='/';
+    current.searchParams.delete('offline-probe');
+    location.replace(current.href);return;
+   }
   }catch{}
   await delay(500);
  }
  reconnecting=false;status.textContent='Network is available, but your office server is still unreachable. Try again shortly.';
 }
 window.addEventListener('online',()=>{check();void retry();});
-window.addEventListener('offline',()=>{reconnecting=false;check();});check();
+window.addEventListener('offline',()=>{reconnecting=false;check();});
+check();
 </script></body></html>

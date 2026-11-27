@@ -9,6 +9,7 @@ const {chromium}=require('playwright');
 const port=3417,base='http://127.0.0.1:'+port;
 const next=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-p',String(port),'-H','127.0.0.1'],{stdio:['ignore','pipe','pipe'],env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'}});
 let browser,context;let serverOutput='';next.stdout.on('data',d=>serverOutput=(serverOutput+d).slice(-8000));next.stderr.on('data',d=>serverOutput=(serverOutput+d).slice(-8000));
+const diagnostics={failedRequests:[],pageErrors:[],consoleErrors:[],navigationResponses:[]};
 try{
  let ready=false;for(let i=0;i<90;i++){if(next.exitCode!==null)break;try{const r=await fetch(base+'/manifest.webmanifest');if(r.ok){ready=true;break;}}catch{}await sleep(500);}assert.ok(ready,'Next server failed: '+serverOutput);
  const manifest=await (await fetch(base+'/manifest.webmanifest')).json();assert.equal(manifest.display,'standalone');assert.equal(manifest.start_url,'/');assert.ok(manifest.icons.some(i=>i.sizes==='192x192'));assert.ok(manifest.icons.some(i=>i.sizes==='512x512'));
@@ -24,6 +25,10 @@ try{
   await route.fulfill({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(payload)});
  });
  const page=await context.newPage();page.setDefaultTimeout(30000);
+ page.on('requestfailed',request=>{if(request.url().startsWith(base))diagnostics.failedRequests.push({url:request.url(),failure:request.failure()?.errorText});});
+ page.on('pageerror',error=>diagnostics.pageErrors.push(error.message));
+ page.on('console',message=>{if(message.type()==='error')diagnostics.consoleErrors.push(message.text());});
+ page.on('response',response=>{if(response.request().isNavigationRequest())diagnostics.navigationResponses.push({url:response.url(),status:response.status()});});
  await page.goto(base);await page.getByText('OFFICE CONNECTION',{exact:true}).waitFor();
  failBoot=false;await page.getByRole('button',{name:'Reconnect',exact:true}).click();
  await page.getByText('PWA smoke empire',{exact:true}).waitFor();
@@ -34,8 +39,14 @@ try{
  await page.getByText('PWA smoke empire',{exact:true}).waitFor();
  await page.reload({waitUntil:'domcontentloaded'}).catch(()=>null);
  await page.waitForFunction(()=>document.body.innerText.includes('Your office is temporarily unreachable.'),{},{timeout:20000}).catch(async()=>{throw new Error('Offline navigation did not return the public offline shell. Body: '+(await page.locator('body').innerText()).slice(0,1000));});
- await context.setOffline(false);await page.waitForFunction(()=>navigator.onLine&&document.body.innerText.includes('PWA smoke empire'),{},{timeout:30000});await page.waitForLoadState('networkidle');
- await page.goto(base+'/?app=settings');await page.getByText('App & connection',{exact:true}).waitFor().catch(async()=>{const diagnostics=await page.evaluate(()=>({online:navigator.onLine,controlled:!!navigator.serviceWorker.controller,url:location.href}));throw new Error('Settings deep link did not restore after reconnect. '+JSON.stringify(diagnostics)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
+ await context.setOffline(false);
+ const retry=page.getByRole('button',{name:'Try again',exact:true});
+ if(await retry.isVisible().catch(()=>false))await retry.click();
+ await page.getByText('PWA smoke empire',{exact:true}).waitFor().catch(async()=>{throw new Error('Automatic reconnect did not restore the office. Server: '+serverOutput+' Diagnostics: '+JSON.stringify(diagnostics)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
+ await page.waitForLoadState('networkidle');
+ let settingsResponse=null;
+ try{settingsResponse=await page.goto(base+'/?app=settings',{waitUntil:'domcontentloaded'});}catch(error){throw new Error('Settings deep link navigation failed: '+error.message+'; server: '+serverOutput+'; diagnostics: '+JSON.stringify(diagnostics));}
+ await page.getByText('App & connection',{exact:true}).waitFor().catch(async()=>{const details=await page.evaluate(()=>({online:navigator.onLine,controlled:!!navigator.serviceWorker.controller,url:location.href,ready:document.readyState}));throw new Error('Settings deep link did not restore after reconnect. '+JSON.stringify(details)+' Response: '+(settingsResponse?.status()??'none')+' Server: '+serverOutput+' Diagnostics: '+JSON.stringify(diagnostics)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
  await page.getByText('Private records are not saved to persistent browser storage.',{exact:false}).waitFor();
  const keys=await page.evaluate(async()=>{const result=[];for(const name of await caches.keys()){if(!name.startsWith('chairmans-office-'))continue;const cache=await caches.open(name);for(const req of await cache.keys())result.push(new URL(req.url).pathname);}return result;});
  assert.ok(keys.includes('/offline.html'));assert.ok(keys.every(p=>p.startsWith('/_next/static/')||['/offline.html','/icon-192.png','/icon-512.png','/apple-touch-icon.png','/manifest.webmanifest'].includes(p)));assert.ok(stateRequests>=2);
