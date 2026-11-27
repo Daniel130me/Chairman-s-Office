@@ -1,0 +1,35 @@
+import React,{useEffect,useState} from 'react';
+import {api,usd} from './api.js';
+
+export default function CorporateFinance({state,notify,onChange,section='group'}){
+ const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[form,setForm]=useState(null);
+ const loans=state.operations?.loans||[],deals=state.operations?.acquisitions||[];
+ async function load(){try{const result=await api('/corporate-finance');setData(result);setError('');}catch(e){setError(e.message);}}
+ useEffect(()=>{let active=true;api('/corporate-finance').then(r=>{if(active){setData(r);setError('');}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[state]);
+ function open(type,id,kind){setForm({type,id,kind,operationKey:crypto.randomUUID()});}
+ function field(k,v){setForm(f=>({...f,[k]:v}));}
+ async function submit(e){
+  e.preventDefault();if(busy||!form)return;setBusy(true);
+  try{
+   const {type,id,...body}=form;
+   const path=type==='diligence'?'/acquisitions/'+id+'/diligence':type==='terms'?'/loans/'+id+'/terms':type==='refinance'?'/loans/'+id+'/refinance':'/corporate-investments/'+id+'/adjust';
+   await api(path,{method:'POST',body});setForm(null);await load();await onChange();notify('Corporate finance record saved.');
+  }catch(e){notify(e.message);}finally{setBusy(false);}
+ }
+ if(error)return <div className="detail-section"><b>Corporate finance unavailable</b><p>{error}</p><button onClick={load}>Retry</button></div>;
+ if(!data)return <div className="detail-section">Loading corporate finance records…</div>;
+ const g=data.group;
+ const input=(k,label,type='text')=><label key={k}>{label}<input required type={type} step={type==='number'?'any':undefined} value={form?.[k]??''} onChange={e=>field(k,e.target.value)}/></label>;
+ return <div className="content-section">
+ {section==='group'&&<><h3>Corporate group accounts</h3><div className="detail-section"><b>{g.companyCount} companies · {g.subsidiaryCount} controlled subsidiaries</b><p>Cash {usd(g.cash)} · Assets {usd(g.assets)} · Liabilities {usd(g.liabilities)}</p><p>Revenue {usd(g.revenue)} · Expenses {usd(g.expenses)} · Net income {usd(g.netIncome)}</p><p>Group equity {usd(g.equity)} · Parent interest {usd(g.parentEquity)} · Minority interest {usd(g.nonControllingInterest)}</p><p>Parent net income {usd(g.parentNetIncome)} · Minority income {usd(g.nonControllingIncome)}</p><p>Investment eliminated {usd(g.investmentEliminated)} · Modelled goodwill {usd(g.goodwill)} · Balance check {usd(g.balanceCheck)}</p><small>{g.scope}</small>{g.warnings.map(w=><p key={w}>{w}</p>)}</div></>}
+ {section==='loans'&&<><h3>Treasury & lending conditions</h3>{loans.filter(l=>['draft','approved','disbursed'].includes(l.status)).map(l=><div className="detail-section" key={l.id}><b>{l.lender_name} · {l.status}</b>{data.collateral.filter(x=>x.loan_id===l.id).map(x=><p key={x.id}>Fixed asset pool pledge: {usd(x.pledged_amount)} · {x.description}</p>)}{data.covenants.filter(x=>x.loan_id===l.id).map(x=><p key={x.id}>{x.kind} {usd(x.threshold)} · {x.last_status||'Not yet checked'}{x.last_actual!==null?' · Actual '+usd(x.last_actual):''}</p>)}{l.status!=='disbursed'?<><button onClick={()=>open('terms',l.id,'collateral')}>Set collateral</button> <button onClick={()=>open('terms',l.id,'minimum-cash')}>Minimum cash covenant</button> <button onClick={()=>open('terms',l.id,'maximum-debt')}>Maximum debt covenant</button></>:l.schedule_version===1&&Number(l.outstanding_principal)>0?<button onClick={()=>open('refinance',l.id)}>Refinance outstanding loan</button>:null}</div>)}{data.refinancings.map(r=><div key={r.id} className="detail-section"><b>Refinancing completed</b><p>Principal paid {usd(r.principal_paid)} · Interest paid {usd(r.interest_paid)}</p><p>{r.reason}</p></div>)}</>}
+ {section==='investments'&&<><h3>Acquisition due diligence</h3>{deals.filter(x=>['draft','approved'].includes(x.status)).map(d=><div key={d.id} className="detail-section"><b>{d.target_name}</b><p>{d.diligence_required?'Four areas must be cleared before approval and completion.':'Legacy proposal; diligence can still be recorded.'}</p>{['financial','legal','commercial','operational'].map(area=>{const r=data.diligence.find(x=>x.acquisition_id===d.id&&x.area===area);return <div key={area}><p>{area} · {r?.status||'pending'} {r?.evidence?' · '+r.evidence:''}</p><button onClick={()=>{open('diligence',d.id,area);setForm(f=>({...f,area,status:r?.status||'pending',evidence:r?.evidence||''}));}}>Record {area} review</button></div>;})}</div>)}<h3>Investment carrying amounts</h3>{data.holdings.map(h=><div className="detail-section" key={h.id}><b>{h.target_name} · {h.status}</b><p>Stake {h.ownership_percentage}% · Original cost {usd(h.cost_basis)} · Carrying value {usd(h.carrying_amount??h.cost_basis)}</p>{h.status==='active'&&<><button onClick={()=>open('adjust',h.id,'impairment')}>Recognize impairment</button>{!h.target_company_id&&<> <button onClick={()=>open('adjust',h.id,'disposal')}>Sell minority stake</button></>}</>}</div>)}{data.adjustments.map(r=><div key={r.id} className="detail-section"><b>{r.kind} · {usd(r.amount)}</b><p>{r.reason}</p>{r.proceeds!==null&&<p>Proceeds {usd(r.proceeds)} · Stake sold {r.stake_sold}%</p>}</div>)}</>}
+ {form&&<form className="form-card" onSubmit={submit}><h3>{form.type==='refinance'?'Approve replacement financing':form.type==='diligence'?'Record diligence':form.kind.replaceAll('-',' ')}</h3>
+ {form.type==='diligence'&&<><label>Status<select value={form.status} onChange={e=>field('status',e.target.value)}><option value="pending">Pending</option><option value="cleared">Cleared</option><option value="blocked">Blocked</option></select></label><label>Recorded supporting evidence<textarea required minLength={10} value={form.evidence} onChange={e=>field('evidence',e.target.value)}/></label></>}
+ {form.type==='terms'&&(form.kind==='collateral'?<>{input('amount','Pledged fixed asset value (USD)','number')}{input('description','Describe recorded fixed asset pool')}</>:input('threshold','Covenant threshold (USD)','number'))}
+ {form.type==='refinance'&&<>{input('lender','New lender')}{input('principal','New principal (USD)','number')}{input('annualInterestRate','Annual interest rate (%)','number')}{input('termMonths','Term in months','number')}<p>Submitting records your approval and atomically pays off the old loan with new proceeds and available cash. Replacement terms are unsecured unless separately supported.</p></>}
+ {form.type==='adjust'&&(form.kind==='impairment'?input('amount','Impairment (USD)','number'):<>{input('stakeSold','Percentage points sold','number')}{input('proceeds','Sale proceeds (USD)','number')}</>)}
+ {['adjust','refinance'].includes(form.type)&&<label>Evidence and reason<textarea required value={form.reason||''} onChange={e=>field('reason',e.target.value)}/></label>}
+ <button className="primary-btn" disabled={busy}>{busy?'Saving…':'Confirm and record'}</button><button type="button" disabled={busy} onClick={()=>setForm(null)}>Cancel</button></form>}
+ </div>;
+}
