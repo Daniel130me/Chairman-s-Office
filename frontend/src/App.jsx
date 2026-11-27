@@ -5,6 +5,7 @@ import { authClient } from '../../lib/auth/client.js';
 import{api,usd,shortDate,shortTime,toUint8}from './api.js';import{playRing,stopRing,clickTone}from './sound.js';
 import {useExecutiveVoice} from './useExecutiveVoice.js';
 import TravelConcierge from './TravelConcierge.jsx';
+import SupplierRfq from './SupplierRfq.jsx';
 import AdvancedOperations from './AdvancedOperations.jsx';
 import CorporateFinance from './CorporateFinance.jsx';
 import {buildActivityFeed,mergeActivityHistory} from './activity-feed.js';
@@ -533,7 +534,7 @@ function Inventory({state,onBack,onChange,notify}){
   else {url='/inventory/'+o.id+'/reorder';body={reorderLevel:o.reorderLevel,reorderQuantity:o.reorderQuantity,supplier:o.supplier};}
   if(await request(url,{...body,operationKey:o.key},'Inventory operation recorded.'))setOperation(null);
  }
- return <><AppHeader title="Inventory & Procurement" back={onBack} subtitle="Orders · stock · supplier payables"/><AdvancedOperations state={state} onChange={onChange} notify={notify} section="inventory"/>
+ return <><AppHeader title="Inventory & Procurement" back={onBack} subtitle="Orders · stock · supplier payables"/><AdvancedOperations state={state} onChange={onChange} notify={notify} section="inventory"/><SupplierRfq state={state} onChange={onChange} notify={notify}/>
  <div className="content-section"><h3>Inventory position</h3>{items.length===0&&<p>No inventory items yet. Draft a purchase order to get started.</p>}{items.map(x=><div className="detail-section" key={x.id}><div className="finance-company"><div><b>{x.name}</b><small>{x.sku} · {x.company_name} · Avg cost {usd(x.average_cost)}</small></div><strong>{Number(x.quantity).toLocaleString()}</strong></div><p>Stock value {usd(x.stock_value||0)} · Reorder at {x.reorder_level||'0'}{Number(x.reorder_quantity)>0&&Number(x.quantity)<=Number(x.reorder_level)?' · Low stock':''}</p><button disabled={busy||Number(x.quantity)<=0} onClick={()=>open('sell',x)}>Sell stock</button><button disabled={busy} onClick={()=>open('reorder',x)}>Reorder settings</button></div>)}</div>
  {operation&&<form className="form-card" onSubmit={submit}><h3>{operation.type==='receive'?'Partial receipt':operation.type==='pay'?'Partial supplier payment':operation.type==='sell'?'Cash sale':'Reorder settings'} · {operation.label}</h3>
  {['receive','sell'].includes(operation.type)&&<label>Quantity<input required inputMode="decimal" value={operation.quantity} onChange={e=>edit('quantity',e.target.value)}/></label>}
