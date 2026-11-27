@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cents,money,evaluateCovenant,consolidateGroup,validateDiligence} from '../lib/corporate-finance-rules.mjs';
+import {cents,money,evaluateCovenant,consolidateGroup,validateDiligence,acquisitionAllocation} from '../lib/corporate-finance-rules.mjs';
 import {accounts} from '../lib/economy-rules.mjs';
 test('money and covenant limits are exact, including equality',()=>{
  assert.equal(money(cents('999999999999.99')),'999999999999.99');
@@ -32,4 +32,11 @@ test('matched intercompany financing eliminates both sides without changing cash
  const result=consolidateGroup([{id:'a',name:'A'},{id:'b',name:'B'}],[{companyId:'a',assets:'100',cash:'50',liabilities:'0',equity:'100',revenue:'0',expenses:'0'},{companyId:'b',assets:'50',cash:'50',liabilities:'50',equity:'0',revenue:'0',expenses:'0'}],[],[{lender_company_id:'a',borrower_company_id:'b',outstanding:'50'}]);
  assert.equal(result.assets,'100.00');assert.equal(result.liabilities,'0.00');assert.equal(result.cash,'100.00');assert.equal(result.balanceCheck,'0.00');
  assert.deepEqual(accounts('intercompany-advance'),['accounts_receivable','cash']);assert.deepEqual(accounts('intercompany-receipt'),['cash','loans_payable']);
+});
+
+test('acquisition allocation avoids double counting opening assets and equity',()=>{
+ assert.deepEqual(acquisitionAllocation('300','75','100','200'),{netAssets:'300.00',parentShare:'225.00',goodwill:'75.00',openingNci:'75.00'});
+ assert.throws(()=>acquisitionAllocation('100','75','100','200'),/Bargain/);
+ const result=consolidateGroup([{id:'p',name:'Parent'},{id:'s',name:'Acquired',parent_company_id:'p',ownership_percentage:'75.00'}],[{companyId:'p',assets:'1000',cash:'700',liabilities:'0',equity:'1000',revenue:'0',expenses:'0',netIncome:'0'},{companyId:'s',assets:'300',cash:'100',liabilities:'0',equity:'300',revenue:'0',expenses:'0',netIncome:'0'}],[{investor_company_id:'p',target_company_id:'s',status:'active',cost_basis:'300',acquired_cash:'100',acquired_fixed_assets:'200'}]);
+ assert.equal(result.assets,'1075.00');assert.equal(result.equity,'1075.00');assert.equal(result.parentEquity,'1000.00');assert.equal(result.nonControllingInterest,'75.00');assert.equal(result.goodwill,'75.00');assert.equal(result.balanceCheck,'0.00');
 });
