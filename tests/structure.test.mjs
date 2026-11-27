@@ -105,3 +105,15 @@ test('activity history is authenticated, tenant-scoped and uses stable cursor pa
 });
 
 test('voice notes use private authenticated playback and stable call linkage',()=>{const routes=read('lib/routes.mjs'),notes=read('lib/voice-notes.mjs'),app=read('frontend/src/App.jsx');assert.match(routes,/requireUser\(\)/);assert.match(notes,/v\.user_id=\$2/);assert.match(notes,/x-transcription-consent/);assert.match(notes,/client_message_key/);assert.match(app,/MediaRecorder/);assert.match(app,/api\/voice-notes/);});
+
+
+test('real-world intelligence refresh is connected to the durable world engine and state',async()=>{
+ const engine=await readFile(new URL('../lib/world-engine.mjs',import.meta.url),'utf8');
+ const world=await readFile(new URL('../backend/src/world.mjs',import.meta.url),'utf8');
+ const routes=await readFile(new URL('../lib/routes.mjs',import.meta.url),'utf8');
+ const activation=await readFile(new URL('../lib/engine-activation.mjs',import.meta.url),'utf8');
+ assert.match(engine,/refreshRealWorldSignals/);assert.match(engine,/real-world-intelligence/);
+ assert.match(world,/realWorldSignalSnapshot/);assert.match(world,/realWorldSignals/);
+ assert.match(routes,/intelligence\/refresh/);assert.match(routes,/realWorldRefreshWorkflow/);
+ assert.match(activation,/ENGINE_REVISION=20/);
+});
