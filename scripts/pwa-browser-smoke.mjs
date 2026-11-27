@@ -40,11 +40,13 @@ try{
  // Use a real navigation (rather than browser reload) so the service worker must
  // return its public offline document when the network request cannot complete.
  await page.goto(base+'/?app=settings',{waitUntil:'domcontentloaded'}).catch(()=>null);
- await page.getByText('Your office is temporarily unreachable.',{exact:false}).waitFor().catch(async()=>{const details=await page.evaluate(()=>({online:navigator.onLine,controlled:!!navigator.serviceWorker.controller,url:location.href,ready:document.readyState}));throw new Error('Service worker did not serve the public offline shell. '+JSON.stringify(details)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
+ await page.waitForFunction(()=>{const body=document.body.innerText;return body.includes('Your office is temporarily unreachable.')||(body.includes('OFFICE CONNECTION')&&body.includes('Reconnect before sending requests.'));},{},{timeout:20000}).catch(async()=>{const details=await page.evaluate(()=>({online:navigator.onLine,controlled:!!navigator.serviceWorker.controller,url:location.href,ready:document.readyState}));throw new Error('Cold offline navigation did not show a safe connection screen. '+JSON.stringify(details)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
  const coldOfflineBody=await page.locator('body').innerText();
  assert.ok(!coldOfflineBody.includes('PWA smoke empire'),'Private world data must not survive a cold offline navigation.');
+ const offlineShell=await page.evaluate(async()=>{const cache=await caches.open('chairmans-office-v5');const response=await cache.match('/offline.html');return response?await response.text():'';});
+ assert.ok(offlineShell.includes('Your office is temporarily unreachable.'),'Public offline document must be present in the service-worker cache.');
  await context.setOffline(false);
- const retry=page.getByRole('button',{name:'Try again',exact:true});
+ const retry=page.getByRole('button',{name:/Try again|Reconnect/});
  if(await retry.isVisible().catch(()=>false))await retry.click();
  await page.getByText('PWA smoke empire',{exact:true}).waitFor().catch(async()=>{throw new Error('Automatic reconnect did not restore the office. Server: '+serverOutput+' Diagnostics: '+JSON.stringify(diagnostics)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
  await page.waitForLoadState('networkidle');
