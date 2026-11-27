@@ -17,7 +17,7 @@ export function usePwa(){
   const sw=navigator.serviceWorker;
   const change=()=>{if(requested.current){requested.current=false;clearTimeout(updateTimer.current);window.location.reload();}};
   listen(sw,'controllerchange',change);
-  const check=()=>{if(document.visibilityState==='visible'&&navigator.onLine!==false)registration.current?.update().catch(()=>{});};
+  let checkedAt=0;const check=()=>{if(document.visibilityState==='visible'&&navigator.onLine!==false&&Date.now()-checkedAt>60000){checkedAt=Date.now();registration.current?.update().catch(()=>{});}};
   listen(window,'online',check);listen(window,'pageshow',check);listen(document,'visibilitychange',check);
   const watch=reg=>{
    if(!active)return;
@@ -29,7 +29,7 @@ export function usePwa(){
     const installing=reg.installing;
     if(installing&&!watched.has(installing)){watched.add(installing);listen(installing,'statechange',inspect);}
    };
-   listen(reg,'updatefound',inspect);inspect();
+   listen(reg,'updatefound',inspect);inspect();const timer=setInterval(check,30*60*1000);cleanup.push(()=>clearInterval(timer));
   };
   sw.register('/sw.js',{updateViaCache:'none'}).then(watch).catch(()=>{if(active)setWorker('failed');});
   return()=>{active=false;cleanup.forEach(f=>f());clearTimeout(updateTimer.current);};
