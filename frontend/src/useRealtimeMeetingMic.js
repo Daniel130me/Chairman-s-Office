@@ -69,7 +69,6 @@ export function useRealtimeMeetingMic({meetingId,onStartSpeaking,onTranscript,on
     if(!live())return;let event;try{event=JSON.parse(e.data);}catch{return;}
     if(event.type==='conversation.item.input_audio_transcription.delta'&&(!s.pendingItemId||event.item_id===s.pendingItemId)&&typeof event.delta==='string')setCaption(prev=>(prev+event.delta).slice(-3000));
     if(event.type==='error'){fail('Streaming transcription unavailable. Use recorded speech mode.');return;}
-    if(event.type==='error'){fail('Streaming transcription unavailable. Use recorded speech mode.');return;}
     if(event.type==='input_audio_buffer.committed'&&s.pending){
      s.pendingItemId=event.item_id;
      const buffered=s.completed.get(event.item_id);if(buffered)void finishTranscript(buffered);
