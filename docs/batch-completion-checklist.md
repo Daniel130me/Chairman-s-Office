@@ -18,7 +18,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Limited evidence-backed allocation of opening cash and fixed assets, with proportionate NCI and goodwill elimination.
 - [x] Control-retaining partial subsidiary stake sale with ownership updates, goodwill preservation and group equity reclassification implemented.
 - [x] Documented identifiable intangible assets, assumed trade payable for a named creditor, and evidence-backed payable settlement; acquisition net assets and goodwill extended accordingly.
-- [ ] Loss-of-control disposal/deconsolidation (including safe removal of disposed companies from autonomous operations and preservation of history), other assumed debt, multiple creditors, negative net assets, bargain purchases and intangible amortization/impairment; richer ownership/covenant mechanisms and date-weighted historical attribution of group earnings.
+- [x] Loss-of-control disposal for a direct standalone subsidiary: complete exit or retained minority interest, closing financial statement, modeled disposal-date group gain/loss, archive protection and active operations filters.
+- [ ] Complex disposal of nested subsidiaries or unresolved obligations, complete historical consolidated reporting including sold-company earnings up to sale, other assumed debt, multiple creditors, negative net assets, bargain purchases and intangible amortization/impairment; richer ownership/covenant mechanisms.
 - [ ] Final merge and live ledger reconciliation.
 
 ## Batch 3 — Business Operations
@@ -55,7 +56,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Initial Batch 5 GitHub Actions run 45945270170 passed every migration, transaction and production-build step.
 - [x] GitHub Actions run 45946826729 passed for competitive sourcing, limited allocation and autonomous replacement quotes.
 - [x] GitHub Actions run 45947711299 passed for control-retaining sales and installment settlements.
-- [ ] Verify latest commit including settlement renegotiation, acquired intangibles and assumed creditor balances.
+- [x] GitHub Actions run 45948300427 passed for settlement renegotiation, acquired intangibles and assumed creditor balances.
+- [ ] Verify latest loss-of-control disposal changes, migration and archive protection tests.
 - [ ] Run all automated tests, verify Neon migrations and deployment, reconcile financial state.
 - [ ] Test inbound/outbound calls, callbacks, missed/declined calls, voicemail, voice notes, cross-channel memory and boardroom outcomes.
 - [ ] Test autonomous offline progression (including multi-day absence and duplicate prevention), activity history and every phone app.
