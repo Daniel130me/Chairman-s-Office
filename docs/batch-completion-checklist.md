@@ -45,7 +45,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Interruptible meeting rounds with atomic stale-response fencing, directed executive questions, idempotent Chairman turns, resumable polling and stable final minutes.
 - [x] Opt-in conversational microphone with local voice activity detection, requested acoustic echo cancellation, utterance-level transcription and playback interruption; microphone stops when hidden or closed.
 - [x] Renewable meeting worker leases, bounded missing-response retry, stale-worker fencing and bounded audio prefetch.
-- [x] Optional WebRTC streaming microphone with live captions, short-lived transcription credentials, explicit consent, and recorded speech fallback. Off by default pending provider acceptance.
+- [x] Optional WebRTC streaming microphone with live captions, short-lived transcription credentials, explicit consent, separate local VAD/outbound tracks, ICE gathering gate, abortable teardown and recorded speech fallback. Off by default pending provider acceptance.
+- [x] Automated regression tests for microphone track isolation and WebRTC ICE readiness, timeout and cancellation.
 - [ ] Verify live streaming input and low-latency continuous speech-to-speech output, overlapping speech, and real-device echo/latency. Executive synthesis remains segmented; see `meeting-voice-acceptance.md`.
 - [x] Autonomous fictional travel-provider disruption review, alternative booking proposals with manually recorded quotes, approved replacement bookings and fee workflows implemented on Batch 5.
 - [x] Autonomous concierge replacement quote generation from the recorded fictional provider; bounded price and fees, separate Chairman approval.
