@@ -23,7 +23,7 @@ const categoryFor = kind => {
   if (/employee|employment|hire|terminat|executive.appoint|people/.test(value)) return 'people';
   if (/security|investigation|evidence|fraud|incident/.test(value)) return 'security';
   if (/travel|booking|grant|personal|asset|family/.test(value)) return 'personal';
-  if (/competitor|market|news|signal|external/.test(value)) return 'intelligence';
+  if (/competitor|market|news|signal|external|character|relationship|stakeholder/.test(value)) return 'intelligence';
   if (/document|report|memo/.test(value)) return 'documents';
   if (/approval|request/.test(value)) return 'approvals';
   return 'business';
@@ -119,6 +119,16 @@ export function buildActivityFeed(state = {}, user = {}) {
     'board-vote-closed': 'board',
     'board-motion-decided': 'board',
     'relationship-outcome': 'intelligence',
+    'character-goal-created': 'intelligence',
+    'character-initiative-opened': 'messages',
+    'character-goal-progress': 'intelligence',
+    'character-goal-completed': 'intelligence',
+    'security-scenario-reported': 'security',
+    'security-review-ready': 'security',
+    'security-interview-completed': 'security',
+    'security-work-completed': 'security',
+    'security-evidence-corroborated': 'security',
+    'security-evidence-disputed': 'security',
     'stakeholder-contact': 'messages',
     'supplier-quote': 'inventory',
     'personal-debt-created': 'family',

@@ -23,9 +23,9 @@ test('advisory board requires quorum and records independent rationale',()=>{
  assert.equal(boardRecommendation(4,['for','abstain','abstain']).present,3);
 });
 test('relationship indicators follow recorded outcomes and are bounded',()=>{
- assert.deepEqual(relationshipAfter({trust:99,respect:100,tension:0},'supplier-delivery'),{trust:100,respect:100,tension:0});
- assert.deepEqual(relationshipAfter({trust:50,respect:50,tension:10},'client-payment'),{trust:52,respect:51,tension:9});
- assert.deepEqual(relationshipAfter({trust:1,respect:50,tension:99},'client-dispute'),{trust:0,respect:50,tension:100});
+ assert.deepEqual(relationshipAfter({trust:99,respect:100,tension:0},'supplier-delivery'),{trust:100,respect:100,tension:0,loyalty:56,reputation:56});
+ assert.deepEqual(relationshipAfter({trust:50,respect:50,tension:10},'client-payment'),{trust:52,respect:51,tension:9,loyalty:56,reputation:56});
+ assert.deepEqual(relationshipAfter({trust:1,respect:50,tension:99},'client-dispute'),{trust:0,respect:50,tension:100,loyalty:54,reputation:53});
 });
 test('expense refund restores cash and reverses original expense, not revenue',()=>{
  assert.deepEqual(accounts('expense-refund'),['cash','expense']);
