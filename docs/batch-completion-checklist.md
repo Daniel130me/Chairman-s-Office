@@ -1,5 +1,7 @@
 # Living World — batch completion and verification
 
+Release scope: PWA only. Native Android/iOS applications are deferred by the Chairman; physical PWA/browser acceptance remains required.
+
 Implementation is not synonymous with live acceptance. Keep production isolated until the stacked changes are reviewed and validated.
 
 ## Batch 1 — Living World Intelligence
@@ -21,7 +23,9 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Loss-of-control disposal for a direct standalone subsidiary: complete exit or retained minority interest, closing financial statement, modeled disposal-date group gain/loss, archive protection and active operations filters.
 - [x] Disposal of nested controlled groups and of a subsidiary owned by another subsidiary; consolidated closing statements, group gain/loss and NCI/goodwill treatment, internal intercompany elimination and historical cumulative earnings through the disposal date.
 - [x] Buyer assumption of multiple disbursed loan facilities and acquired trade payables; accrued interest through disposal, creditor-by-creditor evidence, preserved loan/payment history and seller-side servicing fences.
-- [ ] Multiple trade creditors within a single acquisition allocation (currently one payable creditor per allocation); transfer of external intercompany facilities, contracts, purchase orders, employees and other unresolved operating obligations (currently blocked safely); period-by-period consolidated history; negative net assets/bargain purchases; intangible amortization/impairment; richer ownership/covenant mechanisms.
+- [x] Multiple named trade creditors within a single acquisition allocation, individual payment histories and disposal transfer evidence.
+- [x] Forward-only immutable daily group-account observations, captured by the world engine and displayed in Corporate Finance; automated integration regression added (verification pending).
+- [ ] Transfer of external intercompany facilities, contracts, purchase orders, employees and other unresolved operating obligations (currently blocked safely); true period-specific consolidated income reporting; negative net assets/bargain purchases; intangible amortization/impairment; richer ownership/covenant mechanisms.
 - [ ] Final merge and live ledger reconciliation.
 
 ## Batch 3 — Business Operations

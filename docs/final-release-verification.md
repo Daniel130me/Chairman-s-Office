@@ -1,5 +1,7 @@
 # Final release verification and rollback
 
+Release scope: desktop and mobile PWA. Native Android/iOS application development is deferred; mobile browser and installed PWA acceptance remain in scope.
+
 The simulation must not be called complete solely because compilation succeeds. The production branch and production Neon data remain separate from draft development.
 
 ## Before any migration or deployment
@@ -15,7 +17,7 @@ The simulation must not be called complete solely because compilation succeeds. 
 - Incoming/outgoing call, missed/declined call, voicemail, voice note, callback request, message continuation, network interruption and saved transcript.
 - Multi-executive meeting, spoken input, responses, disagreement, minutes, resolutions, follow-up and character memory.
 - 24-hour/multi-day absence, background progression, no duplicate financial or operational events, readable Activity history and notification links.
-- Cash, company and personal ledgers, loan and secured refinance, inventory credits and defective returns, procurement, disputes, acquisitions and travel replacements; reconcile before/after.
+- Cash, company and personal ledgers, loan and secured refinance, inventory credits and defective returns, procurement, disputes, acquisitions and travel replacements; reconcile before/after. Verify daily observed group-account history is immutable, tenant scoped, and not backfilled; compare captured cash/assets/liabilities and ownership with the reconciled position.
 - Two accounts cannot read each other's records, voice audio, calls, events or push subscriptions.
 - Installed Android Chrome and iPhone Safari PWA: permissions, audio unlock, microphone, foreground alerts, closed-app push and reconnect. Browser push does not guarantee native telephone ringing or background media.
 - Inspect errors, scheduler health and repeated provider failures. Verify data remains readable following a provider outage.

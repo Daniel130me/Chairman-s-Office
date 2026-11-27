@@ -6,6 +6,7 @@ import {processLoanObligations} from '../lib/loan-schedule.mjs';
 import {economySnapshot,advanceEconomy,recordSystemAssetPurchase} from '../lib/economy.mjs';
 import {createCompanyLoan,transitionCompanyLoan,repayCompanyLoan,createAcquisition,transitionAcquisition} from '../lib/operations.mjs';
 import {payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
+import {captureGroupAccountHistory,listGroupAccountHistory} from '../lib/group-account-history.mjs';
 const enabled=process.env.RUN_CORPORATE_FINANCE_DB_TESTS==='1';
 test('corporate finance transaction integration on an isolated CI database',{skip:!enabled,timeout:60000},async()=>{
  // Never execute fixtures on a production database.
@@ -23,7 +24,14 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   await repayIntercompany(user,f.id,{amount:'25',reason:'Scheduled repayment',operationKey:uid()});
   let snap=await corporateFinanceSnapshot(user.id);
   assert.equal(snap.group.cash,'1100.00');assert.equal(snap.group.intercompanyEliminated,'75.00');assert.equal(snap.group.balanceCheck,'0.00');
+  assert.equal(await captureGroupAccountHistory(user.id),true);
+  assert.equal(await captureGroupAccountHistory(user.id),false);
+  assert.equal((await listGroupAccountHistory(other.id)).length,0);
+  const observed=(await listGroupAccountHistory(user.id))[0];
+  assert.equal(observed.statement.cash,'1100.00');assert.equal(observed.perimeter.length,2);
   await transaction(async q=>{const [c]=await q('SELECT * FROM companies WHERE id=$1 AND user_id=$2',[a,user.id]);await recordSystemAssetPurchase(q,c,'ci-asset:'+uid(),'100.00','Recorded equipment','Fixture');});
+  assert.equal(await captureGroupAccountHistory(user.id),false);
+  assert.equal((await listGroupAccountHistory(user.id))[0].statement.cash,'1100.00');
   const loan=await createCompanyLoan(user,{companyId:a,lender:'CI Bank',purpose:'Equipment funding',principal:'300',annualInterestRate:'5',termMonths:12,operationKey:uid()});
   await setLoanTerms(user,loan.id,{kind:'collateral',amount:'75',description:'Equipment asset pool'});
   await assert.rejects(()=>setLoanTerms(user,loan.id,{kind:'collateral',amount:'101',description:'Excess pledge'}),/exceeds/i);
