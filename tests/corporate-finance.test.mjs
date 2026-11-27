@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cents,money,evaluateCovenant,consolidateGroup,validateDiligence,acquisitionAllocation} from '../lib/corporate-finance-rules.mjs';
+import {cents,money,evaluateCovenant,consolidateGroup,validateDiligence,acquisitionAllocation,retainingControlSale} from '../lib/corporate-finance-rules.mjs';
 import {accounts} from '../lib/economy-rules.mjs';
 test('money and covenant limits are exact, including equality',()=>{
  assert.equal(money(cents('999999999999.99')),'999999999999.99');
@@ -39,4 +39,12 @@ test('acquisition allocation avoids double counting opening assets and equity',(
  assert.throws(()=>acquisitionAllocation('100','75','100','200'),/Bargain/);
  const result=consolidateGroup([{id:'p',name:'Parent'},{id:'s',name:'Acquired',parent_company_id:'p',ownership_percentage:'75.00'}],[{companyId:'p',assets:'1000',cash:'700',liabilities:'0',equity:'1000',revenue:'0',expenses:'0',netIncome:'0'},{companyId:'s',assets:'300',cash:'100',liabilities:'0',equity:'300',revenue:'0',expenses:'0',netIncome:'0'}],[{investor_company_id:'p',target_company_id:'s',status:'active',cost_basis:'300',acquired_cash:'100',acquired_fixed_assets:'200'}]);
  assert.equal(result.assets,'1075.00');assert.equal(result.equity,'1075.00');assert.equal(result.parentEquity,'1000.00');assert.equal(result.nonControllingInterest,'75.00');assert.equal(result.goodwill,'75.00');assert.equal(result.balanceCheck,'0.00');
+});
+
+test('control-retaining sales preserve goodwill and reclassify disposal gains to equity',()=>{
+ const sale=retainingControlSale('75','10','300','60');
+ assert.deepEqual(sale,{remainingStake:'65.00',basis:'40.00',remainingCarrying:'260.00',gain:'20.00'});
+ assert.throws(()=>retainingControlSale('75','25','300','60'),/retain more than 50/);
+ const result=consolidateGroup([{id:'p',name:'Parent'},{id:'s',name:'Acquired',parent_company_id:'p',ownership_percentage:'65.00'}],[{companyId:'p',assets:'1020',cash:'760',liabilities:'0',equity:'1020',revenue:'20',expenses:'0',netIncome:'20'},{companyId:'s',assets:'300',cash:'100',liabilities:'0',equity:'300',revenue:'0',expenses:'0',netIncome:'0'}],[{investor_company_id:'p',target_company_id:'s',status:'active',carrying_amount:'260',acquired_cash:'100',acquired_fixed_assets:'200',original_ownership_percentage:'75',control_sale_basis:'40',control_sale_gains:'20'}]);
+ assert.equal(result.goodwill,'75.00');assert.equal(result.nonControllingInterest,'105.00');assert.equal(result.netIncome,'0.00');assert.equal(result.equity,'1135.00');assert.equal(result.balanceCheck,'0.00');
 });
