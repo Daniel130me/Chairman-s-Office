@@ -149,3 +149,5 @@ Implementation present on development branch; acceptance checkboxes above delibe
 - [x] Missed-call and colleague voicemail prompts explicitly define caller and recipient roles; reject self-greetings, wrong speaker identity and fabricated phone numbers; use a grounded safe fallback when model output is invalid.
 - [x] Synthetic voicemail voice assignment respects explicit character voice preferences and uses gender-aware Orpheus voice mapping; the Chief of Staff voice is female and professionally directed.
 - [ ] Re-issue or archive historical misaddressed voicemail audio; verify new audio quality with the Chairman on Android/iPhone; verify foreground/background call delivery and notification registration.
+
+- [x] Bumped the durable world-engine revision to 27 to hand off running workflows to the voicemail-repair implementation; the authenticated PWA activation watchdog starts the new revision automatically.
