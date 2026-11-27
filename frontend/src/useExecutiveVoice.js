@@ -1,9 +1,9 @@
 import {useEffect,useRef,useState} from 'react';
 import {speechChunks} from '../../lib/executive-experience-rules.mjs';
-export function useExecutiveVoice({turns,members,enabled,notify}){
+export function useExecutiveVoice({turns,members,enabled,paused=false,notify}){
  const queue=useRef([]),seen=useRef(new Set()),running=useRef(false),generation=useRef(0),audio=useRef(null),abort=useRef(null),settle=useRef(null),on=useRef(enabled),suppressed=useRef(new Set());
  const [speaker,setSpeaker]=useState(null),[mode,setMode]=useState('idle');
- on.current=enabled;
+ on.current=enabled&&!paused;
  function stop(){
   generation.current++;queue.current=[];abort.current?.abort();audio.current?.pause();settle.current?.();settle.current=null;
   window.speechSynthesis?.cancel();running.current=false;setSpeaker(null);setMode('idle');
@@ -45,7 +45,8 @@ export function useExecutiveVoice({turns,members,enabled,notify}){
  }
  function markHistory(history){seen.current=new Set(history.map(t=>t.id));}
  function replay(t){if(!on.current||!t.contact_id)return;stop();queue.current.push(t);void drain();}
- useEffect(()=>{if(!enabled){for(const t of turns)seen.current.add(t.id);stop();return;}for(const t of turns){if(seen.current.has(t.id))continue;seen.current.add(t.id);if(t.contact_id&&!suppressed.current.has(t.round_id))queue.current.push(t);}void drain();},[turns,enabled]);
+ useEffect(()=>{if(paused)stop();},[paused]);
+ useEffect(()=>{if(!enabled){for(const t of turns)seen.current.add(t.id);stop();return;}for(const t of turns){if(seen.current.has(t.id))continue;seen.current.add(t.id);if(t.contact_id&&!suppressed.current.has(t.round_id))queue.current.push(t);}void drain();},[turns,enabled,paused]);
  useEffect(()=>()=>{generation.current++;queue.current=[];abort.current?.abort();audio.current?.pause();settle.current?.();window.speechSynthesis?.cancel();},[]);
  return {speaker,mode,skip,replay,markHistory,suppressRound};
 }
