@@ -24,6 +24,7 @@ import {securitySnapshot} from '../../lib/security.mjs';
 import {securityIntelligenceSnapshot} from '../../lib/security-world.mjs';
 import {grantImpactSnapshot,grantsSnapshot} from '../../lib/philanthropy.mjs';
 import {realWorldNewsSnapshot} from '../../lib/real-world-news.mjs';
+import {terminalRound,selectParticipants,appendMeetingResponse,finishMeetingRound} from '../../lib/meeting-session.mjs';
 import {buildMeetingPrompt} from '../../lib/meeting-rules.mjs';
 import {characterContext,characterIntelligenceSnapshot,queueCharacterMemory,enqueueCharacterMemory} from '../../lib/character-intelligence.mjs';
 const internal=[['Amara Okafor','Chief of Staff','Measured, perceptive and fiercely discreet','Protect the Chairman’s time and long-term reputation'],['Daniel Mercer','Group CFO','Precise, skeptical and analytically rigorous','Preserve liquidity and challenge weak forecasts'],['Nadia Mensah','Chief Operating Officer','Pragmatic, decisive and direct','Keep subsidiaries performing and execution realistic'],['Julian Hart','General Counsel','Calm, exacting and cautious','Prevent reputational and contractual exposure'],['Sophia Vale','Group Strategy Director','Creative, ambitious and competitive','Pursue defensible expansion opportunities'],['Marcus Reid','Board Chair','Independent and challenging','Ensure accountability and shareholder discipline'],['Grace Okafor','Group Human Resources Director','Empathetic, observant and firm','Build a capable workforce and protect fair employment practices'],['Maya Okoye','Chief Security Officer','Alert, disciplined and discreet','Protect people, information and company assets'],['Rafael Chen','Internal Audit Director','Methodical, independent and evidence-led','Identify control weaknesses and investigate irregularities'],['Tunde Adebayo','Chief Commercial Officer','Persuasive, commercially minded and competitive','Grow customer relationships and improve deal quality']];
@@ -240,73 +241,82 @@ export async function createMeeting(user,data){
   return meeting;
  });
 }
-export async function meetingSpeak(user,meetingId,text){
+export async function meetingSpeak(user,meetingId,text,options={}){
  const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);if(!w)throw Error('Empire unavailable');
  const m=await one('SELECT * FROM meetings WHERE id=$1 AND user_id=$2',[meetingId,user.id]);if(!m||m.status==='concluded')throw Error('Meeting unavailable');
- const contacts=await sql('SELECT id FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],id)',[user.id,m.attendees]);
+ const contacts=selectParticipants(await sql('SELECT id FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],id)',[user.id,m.attendees]),options.contactId);
  if(!contacts.length)throw Error('No participants');
  text=String(text||'What are your assessments of the situation?').trim().slice(0,3000);
  return transaction(async q=>{
   const locked=(await q('SELECT id,status FROM meetings WHERE id=$1 AND user_id=$2 FOR UPDATE',[meetingId,user.id]))[0];
   if(!locked||locked.status==='concluded')throw Error('Meeting unavailable');
+  if(options.requestId){const [prior]=await q('SELECT r.*,t.message FROM meeting_rounds r JOIN meeting_turns t ON t.id=r.chairman_turn_id AND t.user_id=r.user_id WHERE r.user_id=$1 AND r.meeting_id=$2 AND r.client_request_id=$3',[user.id,meetingId,options.requestId]);if(prior){if(prior.message!==text||prior.requested_contact_id!==(options.contactId||null))throw Error('Request reference already used.');return {roundId:prior.id,expectedResponses:prior.expected_responses,status:prior.status,replayed:true};}}
   const active=(await q("SELECT id FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 AND status IN ('pending','running') FOR UPDATE",[meetingId,user.id]))[0];
-  if(active)throw Error('The board is still discussing the previous round. Wait for it to finish before speaking again.');
+  if(active&&!options.interrupt)throw Error('The board is still discussing the previous round. Interrupt to take the floor.');
+  if(active)await q("UPDATE meeting_rounds SET status='interrupted',interrupted_at=now(),completed_at=now() WHERE id=$1 AND user_id=$2",[active.id,user.id]);
   const chairmanTurn=(await q('INSERT INTO meeting_turns(id,user_id,meeting_id,speaker,message) VALUES($1,$2,$3,$4,$5) RETURNING *',[uid(),user.id,m.id,user.name,text]))[0];
   await q("UPDATE meetings SET status='in_progress' WHERE id=$1 AND user_id=$2",[m.id,user.id]);
-  const round=(await q('INSERT INTO meeting_rounds(id,user_id,world_id,meeting_id,chairman_turn_id,expected_responses) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[uid(),user.id,w.id,m.id,chairmanTurn.id,contacts.length]))[0];
+  const round=(await q('INSERT INTO meeting_rounds(id,user_id,world_id,meeting_id,chairman_turn_id,expected_responses,client_request_id,requested_contact_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[uid(),user.id,w.id,m.id,chairmanTurn.id,contacts.length,options.requestId||null,options.contactId||null]))[0];
   await q('UPDATE meeting_turns SET round_id=$1 WHERE id=$2 AND user_id=$3',[round.id,chairmanTurn.id,user.id]);
+  if(active){await q('UPDATE meeting_rounds SET interrupted_by=$1 WHERE id=$2 AND user_id=$3',[round.id,active.id,user.id]);await q('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,w.id,'meeting-interrupted',m.title,'Chairman redirected the discussion; saved responses retained.']);}
   return {roundId:round.id,chairmanTurn,expectedResponses:round.expected_responses,status:round.status};
  });
 }
 export async function runMeetingRound(roundId,userId){
  const round=await one('SELECT * FROM meeting_rounds WHERE id=$1 AND user_id=$2',[roundId,userId]);
- if(!round||['completed','partial','failed'].includes(round.status))return round;
- await sql("UPDATE meeting_rounds SET status='running',started_at=coalesce(started_at,now()) WHERE id=$1 AND user_id=$2",[roundId,userId]);
+ if(!round||terminalRound(round.status))return round;
+ const claimed=await one("UPDATE meeting_rounds SET status='running',started_at=coalesce(started_at,now()) WHERE id=$1 AND user_id=$2 AND status IN ('pending','running') RETURNING id",[roundId,userId]);if(!claimed)return;
  try{
   const m=await one('SELECT * FROM meetings WHERE id=$1 AND user_id=$2',[round.meeting_id,userId]);
   const w=await one('SELECT * FROM worlds WHERE id=$1 AND user_id=$2',[round.world_id,userId]);
   const user=await one('SELECT id,name FROM users WHERE id=$1',[userId]);
   if(!m||!w||!user)throw Error('Meeting context unavailable');
-  const contacts=await sql('SELECT * FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],id)',[userId,m.attendees]);
+  const allContacts=await sql('SELECT * FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],id)',[userId,m.attendees]);
+  const contacts=selectParticipants(allContacts,round.requested_contact_id);
   const prior=await sql('SELECT speaker,message FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND created_at<=(SELECT created_at FROM meeting_turns WHERE id=$3 AND user_id=$2) ORDER BY created_at DESC LIMIT 24',[m.id,userId,round.chairman_turn_id]);
   const history=prior.reverse();
-  const existing=await sql('SELECT contact_id FROM meeting_turns WHERE round_id=$1 AND user_id=$2 AND contact_id IS NOT NULL',[roundId,userId]);
+  const existing=await sql('SELECT contact_id,speaker,message FROM meeting_turns WHERE round_id=$1 AND user_id=$2 AND contact_id IS NOT NULL ORDER BY created_at,id',[roundId,userId]);
+  history.push(...existing.map(x=>({speaker:x.speaker,message:x.message})));
   const completed=new Set(existing.map(x=>x.contact_id));
   let saved=existing.length;
   for(const person of contacts){
    if(completed.has(person.id))continue;
+   const current=await one('SELECT status FROM meeting_rounds WHERE id=$1 AND user_id=$2',[roundId,userId]);if(!current||terminalRound(current.status))return current;
    try{
     const context=await characterPrompt(user,person,history.map(turn=>({direction:turn.speaker,body:turn.message})),w);
-    const prompt=buildMeetingPrompt({meetingTitle:m.title,empireName:w.name,person,attendees:contacts,history});
-    const reply=await ask(context+' You are a distinct fictional executive in a private board meeting. Be candid, realistic and evidence-led. Do not invent financial facts or completed actions.',prompt,{fallback:null});
+    const prompt=buildMeetingPrompt({meetingTitle:m.title,empireName:w.name,person,attendees:allContacts,history});
+    const reply=await ask(context+' You are a distinct fictional executive in a private board meeting. Be candid, realistic and evidence-led. Keep spoken replies conversational and concise, normally two or three short sentences. Do not invent financial facts or completed actions.',prompt,{fallback:null});
     if(!reply||typeof reply!=='string'||!reply.trim())continue;
     const message=reply.trim().slice(0,1800);
-    const inserted=await one('INSERT INTO meeting_turns(id,user_id,meeting_id,contact_id,speaker,message,round_id) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(round_id,contact_id) WHERE round_id IS NOT NULL AND contact_id IS NOT NULL DO NOTHING RETURNING id',[uid(),userId,m.id,person.id,person.name,message,roundId]);
-    if(!inserted){const priorTurn=await one('SELECT speaker,message FROM meeting_turns WHERE round_id=$1 AND contact_id=$2',[roundId,person.id]);if(priorTurn){history.push(priorTurn);saved++;completed.add(person.id);}continue;}
-    history.push({speaker:person.name,message});saved++;completed.add(person.id);
-    await sql('UPDATE meeting_rounds SET responses_saved=$1 WHERE id=$2 AND user_id=$3',[saved,roundId,userId]);
+    const result=await appendMeetingResponse(userId,m.id,roundId,person,message);
+    if(result.stopped)return {id:roundId,status:'interrupted'};
+    if(result.turn){history.push({speaker:result.turn.speaker,message:result.turn.message});saved=result.saved;completed.add(person.id);}
+
    }catch(error){console.warn('Board participant response unavailable',person.id,error.name||'error');}
   }
-  const status=saved>=contacts.length?'completed':'partial';
-  await sql('UPDATE meeting_rounds SET status=$1,responses_saved=$2,completed_at=now(),error=NULL WHERE id=$3 AND user_id=$4',[status,saved,roundId,userId]);
-  await sql('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),userId,w.id,'meeting-discussion',m.title,user.name+' addressed the meeting; '+saved+' of '+contacts.length+' executives responded in sequence.']);
-  return {id:roundId,status,responses_saved:saved,expected_responses:contacts.length};
+  const finished=await finishMeetingRound(userId,m.id,roundId);
+  if(!finished)return {id:roundId,status:'interrupted'};
+  await sql('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),userId,w.id,'meeting-discussion',m.title,user.name+' addressed the meeting; '+finished.responses_saved+' of '+finished.expected_responses+' executives responded.']);
+  return finished;
  }catch(error){
-  await sql("UPDATE meeting_rounds SET status='failed',error=$1,completed_at=now() WHERE id=$2 AND user_id=$3",[String(error.message||'Meeting workflow failed').slice(0,500),roundId,userId]);
+  await finishMeetingRound(userId,round.meeting_id,roundId,String(error.message||'Meeting workflow failed').slice(0,500));
   throw error;
  }
 }
 export async function meetingRounds(user,meetingId){
- return sql('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 5',[meetingId,user.id]);
+ return sql('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at,requested_contact_id,interrupted_at FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 5',[meetingId,user.id]);
 }
 export async function meetingRoundStatus(user,meetingId,roundId){
- return one('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at FROM meeting_rounds WHERE id=$1 AND meeting_id=$2 AND user_id=$3',[roundId,meetingId,user.id]);
+ return one('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at,requested_contact_id,interrupted_at FROM meeting_rounds WHERE id=$1 AND meeting_id=$2 AND user_id=$3',[roundId,meetingId,user.id]);
 }
 export async function endMeeting(user,id){
  const m=await one('SELECT * FROM meetings WHERE id=$1 AND user_id=$2',[id,user.id]);if(!m)throw Error('Meeting unavailable');if(m.status==='concluded')return {minutes:m.minutes};
- const turns=await sql('SELECT speaker,message,contact_id FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at',[id,user.id]);
+ if(await one("SELECT id FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 AND status IN ('pending','running')",[id,user.id]))throw Error('Interrupt or finish the current discussion before concluding.');
+ const turns=await sql('SELECT id,speaker,message,contact_id FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at',[id,user.id]);
  const minutes=await ask('Write sober professional meeting minutes based strictly on these fictional discussion turns. Include agenda, divergent views, decisions (only if made), unresolved matters and follow-ups.',JSON.stringify({title:m.title,turns}),{fallback:m.title+'\n\n'+turns.map(x=>x.speaker+': '+x.message).join('\n\n')});
  return transaction(async q=>{
+  const [locked]=await q('SELECT status FROM meetings WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,user.id]);if(!locked)throw Error('Meeting unavailable');
+  if(locked.status!=='concluded'){const [count]=await q('SELECT count(*)::int n FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2',[id,user.id]);const [activeRound]=await q("SELECT id FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 AND status IN ('pending','running')",[id,user.id]);if(activeRound||count.n!==turns.length)throw Error('Discussion changed; conclude again using the latest transcript.');}
   const rows=await q("UPDATE meetings SET minutes=$1,status='concluded' WHERE id=$2 AND user_id=$3 AND status<>'concluded' RETURNING minutes",[minutes,id,user.id]);
   if(!rows.length)return {minutes:(await q('SELECT minutes FROM meetings WHERE id=$1 AND user_id=$2',[id,user.id]))[0].minutes};
   await q('INSERT INTO documents(id,user_id,world_id,title,kind,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,m.world_id,'Minutes — '+m.title,'board minutes',minutes]);
