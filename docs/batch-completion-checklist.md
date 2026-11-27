@@ -15,7 +15,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Acquisition diligence, investment impairment and minority disposal.
 - [x] Independent automated verification reported successful for PR #2.
 - [x] Secured refinancing with replacement collateral and cash/debt covenants implemented on Batch 5.
-- [ ] Controlled-subsidiary disposal/deconsolidation, fair-value acquisition allocation and richer ownership/covenant mechanisms.
+- [x] Limited evidence-backed allocation of opening cash and fixed assets, with proportionate NCI and goodwill elimination.
+- [ ] Controlled-subsidiary disposal/deconsolidation, broader fair-value allocation (liabilities, intangible assets and bargain purchases), richer ownership/covenant mechanisms.
 - [ ] Final merge and live ledger reconciliation.
 
 ## Batch 3 — Business Operations
@@ -27,7 +28,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] GitHub Actions reported success for Batch 3 final commit.
 - [ ] Exercise live user flows.
 - [x] Unpaid/part-paid supplier credit returns and non-restockable customer returns implemented on Batch 5.
-- [ ] Richer multi-supplier RFQ/counteroffer workflows and more detailed negotiated dispute remedies beyond current settlement/credit model.
+- [x] Competitive RFQ for manual draft orders (2–5 distinct supplier companies, independent quotes, up to four rounds, selection followed by separate approval).
+- [ ] More detailed negotiated dispute remedies beyond current settlement/credit model.
 - [ ] Final merge, deployment and acceptance of operational outcomes.
 
 ## Batch 4 — Executive Experience
@@ -37,7 +39,7 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Unit tests and isolated database lifecycle tests authored.
 - [ ] Full-duplex low-latency multi-character voice conferencing with natural turn-taking and true conversational interruption (existing implementation is turn-based).
 - [x] Autonomous fictional travel-provider disruption review, alternative booking proposals with manually recorded quotes, approved replacement bookings and fee workflows implemented on Batch 5.
-- [ ] Autonomous concierge negotiation of replacement quotes.
+- [x] Autonomous concierge replacement quote generation from the recorded fictional provider; bounded price and fees, separate Chairman approval.
 - [ ] Physical Android/iPhone PWA call alert, voice/microphone and notification delivery tests; closed-PWA ringtone is not guaranteed by the web platform.
 - [x] GitHub Actions verification reported success for Batch 4 (run 45944665371); all database and build steps succeeded.
 - [ ] Final merge and live acceptance.
@@ -46,7 +48,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Implement deferred secured refinancing, supplier credits, defective returns and travel replacement workflows.
 - [x] Add database-level regressions and read-only reconciliation for financial/operational invariants.
 - [x] Write release, backup, acceptance and rollback runbook (`final-release-verification.md`).
-- [ ] Verify Batch 5 final commit and all updated integration tests.
+- [x] Initial Batch 5 GitHub Actions run 45945270170 passed every migration, transaction and production-build step.
+- [ ] Verify updated Batch 5 commit including competitive sourcing, acquisition allocation and autonomous replacement quotes.
 - [ ] Run all automated tests, verify Neon migrations and deployment, reconcile financial state.
 - [ ] Test inbound/outbound calls, callbacks, missed/declined calls, voicemail, voice notes, cross-channel memory and boardroom outcomes.
 - [ ] Test autonomous offline progression (including multi-day absence and duplicate prevention), activity history and every phone app.
