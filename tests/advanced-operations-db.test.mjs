@@ -46,6 +46,18 @@ test('stock, returns, contractual enforcement and settlement reconcile in Postgr
   assert.equal(snapshot.financialStatements[0].receivables,'0.00');
   assert.equal(snapshot.financialStatements[0].balanceCheck,'0.00');
   assert.equal((await advancedOperationsSnapshot(u.id)).disputes[0].status,'resolved');
+  const bad=await returnCustomerSale(u,sale.id,{quantity:'1',restockable:false,reason:'Damaged goods cannot be resold',operationKey:uid()});
+  assert.equal(bad.stock_value,'0.00');assert.equal(bad.restockable,false);
+  const second=await createPurchaseOrder(u,{companyId:c,vendor:'Supplier',description:'Credit eligible purchase',lines:[{sku:'S2',name:'Second stock',quantity:'10',unitCost:'10'}],operationKey:uid()});
+  await transitionPurchaseOrder(u,second.id,{status:'approved',reason:'Approved'});
+  await transitionPurchaseOrder(u,second.id,{status:'received',reason:'Received'});
+  const [secondLine]=await sql('SELECT * FROM purchase_order_lines WHERE purchase_order_id=$1',[second.id]);
+  const credit=await returnSupplierLine(u,secondLine.id,{quantity:'4',reason:'Supplier confirmed credit note',operationKey:uid()});
+  assert.equal(credit.credit_value,'40.00');
+  const [credited]=await sql('SELECT credited_total,paid_total FROM purchase_orders WHERE id=$1',[second.id]);assert.equal(credited.credited_total,'40.00');assert.equal(credited.paid_total,'0.00');
+  await transitionPurchaseOrder(u,second.id,{status:'paid',reason:'Net payable settled'});
+  const [paid]=await sql('SELECT paid_total,status FROM purchase_orders WHERE id=$1',[second.id]);assert.equal(paid.paid_total,'60.00');assert.equal(paid.status,'paid');
+  snapshot=await economySnapshot(u.id);assert.equal(snapshot.financialStatements[0].cash,'970.00');assert.equal(snapshot.financialStatements[0].inventory,'100.00');assert.equal(snapshot.financialStatements[0].payables,'0.00');assert.equal(snapshot.financialStatements[0].balanceCheck,'0.00');
  }finally{
   await sql('DELETE FROM commercial_disputes WHERE user_id=$1',[u.id]);
   await sql('DELETE FROM inventory_returns WHERE user_id=$1',[u.id]);
