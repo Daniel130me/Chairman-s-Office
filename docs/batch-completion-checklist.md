@@ -17,7 +17,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Secured refinancing with replacement collateral and cash/debt covenants implemented on Batch 5.
 - [x] Limited evidence-backed allocation of opening cash and fixed assets, with proportionate NCI and goodwill elimination.
 - [x] Control-retaining partial subsidiary stake sale with ownership updates, goodwill preservation and group equity reclassification implemented.
-- [ ] Loss-of-control disposal/deconsolidation, broader fair-value allocation (liabilities, intangible assets and bargain purchases), richer ownership/covenant mechanisms; date-weighted historical attribution of group earnings.
+- [x] Documented identifiable intangible assets, assumed trade payable for a named creditor, and evidence-backed payable settlement; acquisition net assets and goodwill extended accordingly.
+- [ ] Loss-of-control disposal/deconsolidation (including safe removal of disposed companies from autonomous operations and preservation of history), other assumed debt, multiple creditors, negative net assets, bargain purchases and intangible amortization/impairment; richer ownership/covenant mechanisms and date-weighted historical attribution of group earnings.
 - [ ] Final merge and live ledger reconciliation.
 
 ## Batch 3 — Business Operations
@@ -31,7 +32,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Unpaid/part-paid supplier credit returns and non-restockable customer returns implemented on Batch 5.
 - [x] Competitive RFQ for manual draft orders (2–5 distinct supplier companies, independent quotes, up to four rounds, selection followed by separate approval).
 - [x] Evidence-backed installment settlement agreements, confirmed receipts, deadline escalation and conditional final invoice credits implemented.
-- [ ] Renegotiation after partial payment and other commercial remedies beyond installments/settlement/credit.
+- [x] Renegotiation after partial payment: preserve confirmed receipts, archive the previous agreement, recalculate remaining installments and conditional credit, fence stale amendments.
+- [ ] Other commercial remedies beyond installments/settlement/credit.
 - [ ] Final merge, deployment and acceptance of operational outcomes.
 
 ## Batch 4 — Executive Experience
@@ -52,7 +54,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Write release, backup, acceptance and rollback runbook (`final-release-verification.md`).
 - [x] Initial Batch 5 GitHub Actions run 45945270170 passed every migration, transaction and production-build step.
 - [x] GitHub Actions run 45946826729 passed for competitive sourcing, limited allocation and autonomous replacement quotes.
-- [ ] Verify latest commit including control-retaining sales and installment settlements.
+- [x] GitHub Actions run 45947711299 passed for control-retaining sales and installment settlements.
+- [ ] Verify latest commit including settlement renegotiation, acquired intangibles and assumed creditor balances.
 - [ ] Run all automated tests, verify Neon migrations and deployment, reconcile financial state.
 - [ ] Test inbound/outbound calls, callbacks, missed/declined calls, voicemail, voice notes, cross-channel memory and boardroom outcomes.
 - [ ] Test autonomous offline progression (including multi-day absence and duplicate prevention), activity history and every phone app.
