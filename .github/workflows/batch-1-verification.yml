@@ -1,9 +1,9 @@
 name: Batch 1 verification
 on:
   push:
-    branches: [batch-1-living-world-intelligence, batch-2-corporate-empire-finance, batch-3-business-operations, living-world]
+    branches: [batch-1-living-world-intelligence, batch-2-corporate-empire-finance, batch-3-business-operations, batch-4-executive-experience, living-world]
   pull_request:
-    branches: [living-world, batch-1-living-world-intelligence, batch-2-corporate-empire-finance]
+    branches: [living-world, batch-1-living-world-intelligence, batch-2-corporate-empire-finance, batch-3-business-operations]
   workflow_dispatch:
 permissions:
   contents: read
@@ -50,5 +50,7 @@ jobs:
         run: RUN_CORPORATE_FINANCE_DB_TESTS=1 node --test tests/corporate-finance-db.test.mjs
       - name: Advanced operations database transactions
         run: RUN_ADVANCED_OPERATIONS_DB_TESTS=1 node --test tests/advanced-operations-db.test.mjs
+      - name: Executive experience database transactions
+        run: RUN_EXECUTIVE_EXPERIENCE_DB_TESTS=1 node --test tests/executive-experience-db.test.mjs
       - name: Verify production build
         run: npm run build
