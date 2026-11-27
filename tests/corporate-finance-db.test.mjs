@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sql,uid,database,transaction} from '../backend/src/db.mjs';
 import {disposeSubsidiary} from '../lib/subsidiary-disposal.mjs';
+import {processLoanObligations} from '../lib/loan-schedule.mjs';
 import {economySnapshot,advanceEconomy,recordSystemAssetPurchase} from '../lib/economy.mjs';
-import {createCompanyLoan,transitionCompanyLoan,createAcquisition,transitionAcquisition} from '../lib/operations.mjs';
+import {createCompanyLoan,transitionCompanyLoan,repayCompanyLoan,createAcquisition,transitionAcquisition} from '../lib/operations.mjs';
 import {payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
 const enabled=process.env.RUN_CORPORATE_FINANCE_DB_TESTS==='1';
 test('corporate finance transaction integration on an isolated CI database',{skip:!enabled,timeout:60000},async()=>{
@@ -124,6 +125,15 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,childDeal.id,{area,status:'cleared',evidence:'Operating subsidiary diligence verified for '+area});
   await transitionAcquisition(user,childDeal.id,{status:'approved',reason:'Board approved operating subsidiary acquisition'});
   const nestedChild=await transitionAcquisition(user,childDeal.id,{status:'completed',reason:'Operating subsidiary settlement confirmed'});
+  const lenderOne=await createCompanyLoan(user,{companyId:nestedChild.target_company_id,lender:'Nested Bank A',purpose:'Equipment finance',principal:'20',annualInterestRate:'6',termMonths:12,operationKey:uid()});
+  await setLoanTerms(user,lenderOne.id,{kind:'collateral',amount:'2.50',description:'Equipment pool secured to Bank A'});
+  await transitionCompanyLoan(user,lenderOne.id,{status:'approved',reason:'Board approved Bank A facility'});
+  await transitionCompanyLoan(user,lenderOne.id,{status:'disbursed',reason:'Bank A funds received'});
+  const lenderTwo=await createCompanyLoan(user,{companyId:nestedChild.target_company_id,lender:'Nested Bank B',purpose:'Working capital',principal:'10',annualInterestRate:'8',termMonths:12,operationKey:uid()});
+  await setLoanTerms(user,lenderTwo.id,{kind:'collateral',amount:'2.50',description:'Equipment pool secured to Bank B'});
+  await transitionCompanyLoan(user,lenderTwo.id,{status:'approved',reason:'Board approved Bank B facility'});
+  await transitionCompanyLoan(user,lenderTwo.id,{status:'disbursed',reason:'Bank B funds received'});
+
   const internal={lenderCompanyId:nestedParent.target_company_id,borrowerCompanyId:nestedChild.target_company_id,amount:'5',purpose:'Intercompany working capital',operationKey:uid()};
   const internalFacility=await advanceIntercompany(user,internal);
   snap=await corporateFinanceSnapshot(user.id);
@@ -133,9 +143,19 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(nestedExit.retained_stake,'0.00');assert.equal(nestedExit.disposed_company_ids.length,2);
   assert.equal(nestedExit.closing_statement.companyCount,2);assert.equal(nestedExit.closing_statement.companies.length,2);
   assert.equal(nestedExit.closing_statement.subsidiaryCount,1);assert.equal(nestedExit.closing_statement.intercompanyEliminated,'5.00');
+  assert.equal(nestedExit.closing_statement.transferredLoans.length,2);
+  assert.equal(nestedExit.closing_statement.transferredLoans.reduce((n,l)=>n+Number(l.outstanding_principal),0),30);
   assert.equal(nestedExit.closing_statement.intercompanyFacilities.length,1);
   const [transferredFacility]=await sql('SELECT transferred_at,transferred_to FROM intercompany_facilities WHERE id=$1',[internalFacility.id]);
   assert.ok(transferredFacility.transferred_at);assert.equal(transferredFacility.transferred_to,exit.buyer);
+  const [transferredLoans]=await sql('SELECT count(*)::int n FROM company_loans WHERE id=ANY($1::uuid[]) AND transferred_at IS NOT NULL AND transferred_to=$2 AND transferred_disposal_id=$3',[[lenderOne.id,lenderTwo.id],exit.buyer,nestedExit.id]);
+  assert.equal(transferredLoans.n,2);
+  await assert.rejects(()=>repayCompanyLoan(user,lenderOne.id,{principalPaid:'1',interestPaid:'0',reason:'Late seller-side repayment',operationKey:uid()}),/transferred/);
+  await assert.rejects(()=>transitionCompanyLoan(user,lenderTwo.id,{status:'cancelled',reason:'Seller cancellation'}),/transferred/);
+  await assert.rejects(()=>refinanceLoan(user,lenderOne.id,{lender:'Replacement Bank',reason:'Attempted seller refinancing',principal:'20',annualInterestRate:'5',termMonths:12,operationKey:uid()}),/transferred/);
+  await assert.rejects(()=>setLoanTerms(user,lenderTwo.id,{kind:'minimum-cash',threshold:'100'}),/transferred/);
+  await processLoanObligations(user.id);await processCovenants(user.id);
+
   assert.equal((await advanceIntercompany(user,internal)).id,internalFacility.id);
   await assert.rejects(()=>advanceIntercompany(user,{...internal,operationKey:uid()}),/disposed/);
   await assert.rejects(()=>repayIntercompany(user,internalFacility.id,{amount:'1',reason:'Late repayment',operationKey:uid()}),/transferred/);
