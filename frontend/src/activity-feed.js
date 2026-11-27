@@ -94,6 +94,7 @@ export function buildActivityFeed(state = {}, user = {}) {
   };
 
   const eventTargets = {
+    'supplier-rfq-opened':'inventory','supplier-rfq-response':'inventory','supplier-rfq-counter':'inventory','supplier-rfq-awarded':'inventory','supplier-rfq-cancelled':'inventory','acquisition-allocation':'acquisitions','travel-rebooking-proposed':'travel','travel-rebooking-approved':'travel','travel-rebooking-declined':'travel','travel-replacement-unavailable':'travel',
     'travel-disruption':'travel','travel-concierge-ready':'travel','travel-disruption-resolved':'travel','call-recovered':'phone',
     'inventory-stocktake':'inventory','inventory-customer-return':'inventory','inventory-supplier-return':'inventory','supplier-quality-review':'inventory','supplier-delivery-overdue':'inventory','contract-obligation-breached':'operations','contract-obligation-fulfilled':'operations','contract-obligation-waived':'operations','contract-obligation':'operations','commercial-dispute-opened':'operations','commercial-dispute-resolved':'operations',
     'colleague-message': 'messages',
