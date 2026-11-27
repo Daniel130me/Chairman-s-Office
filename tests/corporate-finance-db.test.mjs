@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sql,uid,database,transaction} from '../backend/src/db.mjs';
-import {recordSystemAssetPurchase} from '../lib/economy.mjs';
+import {economySnapshot,recordSystemAssetPurchase} from '../lib/economy.mjs';
 import {createCompanyLoan,transitionCompanyLoan,createAcquisition,transitionAcquisition} from '../lib/operations.mjs';
 import {payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
 const enabled=process.env.RUN_CORPORATE_FINANCE_DB_TESTS==='1';
