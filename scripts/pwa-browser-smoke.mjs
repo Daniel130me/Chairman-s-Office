@@ -28,10 +28,12 @@ try{
  failBoot=false;await page.getByRole('button',{name:'Reconnect',exact:true}).click();
  await page.getByText('PWA smoke empire',{exact:true}).waitFor();
  await page.waitForFunction(()=>!!navigator.serviceWorker.controller,{},{timeout:30000});
+ await page.waitForFunction(async()=>{const names=await caches.keys();if(!names.includes('chairmans-office-v5'))return false;const cache=await caches.open('chairmans-office-v5');return !!await cache.match('/offline.html');},{},{timeout:30000});
  const box=await page.locator('.phone-screen').boundingBox();assert.ok(box.width<=390.5&&box.height<=844.5);
  await context.setOffline(true);await page.getByText('Offline · previously loaded records only',{exact:false}).waitFor();
  await page.getByText('PWA smoke empire',{exact:true}).waitFor();
- await page.reload({waitUntil:'domcontentloaded'});await page.getByText('Your office is temporarily unreachable.',{exact:false}).waitFor();
+ await page.reload({waitUntil:'domcontentloaded'}).catch(()=>null);
+ await page.waitForFunction(()=>document.body.innerText.includes('Your office is temporarily unreachable.'),{},{timeout:20000}).catch(async()=>{throw new Error('Offline navigation did not return the public offline shell. Body: '+(await page.locator('body').innerText()).slice(0,1000));});
  await context.setOffline(false);await page.getByText('PWA smoke empire',{exact:true}).waitFor();
  await page.goto(base+'/?app=settings');await page.getByText('App & connection',{exact:true}).waitFor();
  await page.getByText('Private records are not saved to persistent browser storage.',{exact:false}).waitFor();

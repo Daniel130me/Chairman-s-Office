@@ -108,10 +108,10 @@ test('voice notes use private authenticated playback and stable call linkage',()
 
 
 test('real-world intelligence refresh is connected to the durable world engine and state',async()=>{
- const engine=await readFile(new URL('../lib/world-engine.mjs',import.meta.url),'utf8');
- const world=await readFile(new URL('../backend/src/world.mjs',import.meta.url),'utf8');
- const routes=await readFile(new URL('../lib/routes.mjs',import.meta.url),'utf8');
- const activation=await readFile(new URL('../lib/engine-activation.mjs',import.meta.url),'utf8');
+ const engine=read('lib/world-engine.mjs');
+ const world=read('backend/src/world.mjs');
+ const routes=read('lib/routes.mjs');
+ const activation=read('lib/engine-activation.mjs');
  assert.match(engine,/refreshRealWorldSignals/);assert.match(engine,/real-world-intelligence/);
  assert.match(world,/realWorldSignalSnapshot/);assert.match(world,/realWorldSignals/);
  assert.match(routes,/intelligence\/refresh/);assert.match(routes,/realWorldRefreshWorkflow/);
