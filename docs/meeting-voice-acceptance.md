@@ -31,3 +31,5 @@ True full-duplex speech-to-speech output, overlapping participant audio and devi
 
 ## Optional progressive executive audio
 Set `MEETING_PROGRESSIVE_AUDIO=1` only in an isolated preview with the existing Groq key. Authenticated audio playback relays validated, bounded WAV bytes without waiting for the entire response; the browser uses its native media pipeline. The provider or browser may still buffer. Playback falls back to device speech if no audio began; if audio has already started, the saved statement remains available for replay rather than repeating a partial statement. Test first audible sound, interruption cancellation, browser compatibility and provider buffering with the flag on and off. This is not full-duplex speech-to-speech or overlapping voices.
+
+Test the 'Let the executives debate further' control after a completed round. Verify that follow-up dialogue addresses earlier executive arguments, speaker order changes, no extra Chairman turn appears, and an interruption stops pending responses. At most two follow-ups per initial round; this remains turn-based synthesis, not overlapping speech.

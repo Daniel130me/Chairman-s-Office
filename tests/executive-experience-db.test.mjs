@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sql,uid,database} from '../backend/src/db.mjs';
-import {meetingSpeak,meetingRoundStatus,endMeeting} from '../backend/src/world.mjs';
+import {continueBoardDebate,meetingSpeak,meetingRoundStatus,endMeeting} from '../backend/src/world.mjs';
 import {appendMeetingResponse,finishMeetingRound,interruptMeeting,claimMeetingWorker,renewMeetingWorker,recoverMeetingRounds,retryMeetingRound} from '../lib/meeting-session.mjs';
 import {proposeRebooking,decideRebooking} from '../lib/travel-rebooking.mjs';
 import {createTravelBooking,confirmTravelBooking} from '../lib/travel.mjs';
@@ -57,6 +57,22 @@ test('executive call and travel persistence with tenant isolation',{skip:process
   assert.equal((await finishMeetingRound(u.id,meeting,fourth.roundId,null,replacement.worker_token)).status,'completed');
   const [preserved]=await sql('SELECT message FROM meeting_turns WHERE id=$1',[saved.turn.id]);assert.equal(preserved.message,'Saved before disconnect');
 
+  const [{n:chairmanBefore}]=await sql('SELECT count(*)::int n FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND contact_id IS NULL',[meeting,u.id]);
+  await assert.rejects(()=>continueBoardDebate(other,meeting,fourth.roundId),/unavailable/);
+  const follow=await continueBoardDebate(u,meeting,fourth.roundId);
+  assert.equal(follow.expectedResponses,2);assert.equal((await continueBoardDebate(u,meeting,fourth.roundId)).roundId,follow.roundId);
+  assert.equal((await meetingRoundStatus(u,meeting,follow.roundId)).debate_depth,1);
+  await assert.rejects(()=>continueBoardDebate(u,meeting,follow.roundId),/latest completed/);
+  await appendMeetingResponse(u.id,meeting,follow.roundId,{id:second},'Further challenge to earlier assumptions');
+  await appendMeetingResponse(u.id,meeting,follow.roundId,{id:contact},'Response to the operational challenge');
+  assert.equal((await finishMeetingRound(u.id,meeting,follow.roundId)).status,'completed');
+  const follow2=await continueBoardDebate(u,meeting,follow.roundId);
+  await appendMeetingResponse(u.id,meeting,follow2.roundId,{id:contact},'Clarification');
+  await appendMeetingResponse(u.id,meeting,follow2.roundId,{id:second},'Remaining question');
+  await finishMeetingRound(u.id,meeting,follow2.roundId);
+  await assert.rejects(()=>continueBoardDebate(u,meeting,follow2.roundId),/two follow-up/);
+  const [{n:chairmanAfter}]=await sql('SELECT count(*)::int n FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND contact_id IS NULL',[meeting,u.id]);
+  assert.equal(chairmanAfter,chairmanBefore);
   const a={role:'assistant',text:'Opening remarks'},b={role:'user',text:'Proceed with the review'};
   assert.equal((await checkpointCall(u,call,{offset:0,transcript:[a]})).saved,1);
   assert.equal((await checkpointCall(u,call,{offset:1,transcript:[b]})).saved,2);

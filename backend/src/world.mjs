@@ -250,7 +250,7 @@ export async function meetingSpeak(user,meetingId,text,options={}){
  return transaction(async q=>{
   const locked=(await q('SELECT id,status FROM meetings WHERE id=$1 AND user_id=$2 FOR UPDATE',[meetingId,user.id]))[0];
   if(!locked||locked.status==='concluded')throw Error('Meeting unavailable');
-  if(options.requestId){const [prior]=await q('SELECT r.*,t.message FROM meeting_rounds r JOIN meeting_turns t ON t.id=r.chairman_turn_id AND t.user_id=r.user_id WHERE r.user_id=$1 AND r.meeting_id=$2 AND r.client_request_id=$3',[user.id,meetingId,options.requestId]);if(prior){if(prior.message!==text||prior.requested_contact_id!==(options.contactId||null))throw Error('Request reference already used.');return {roundId:prior.id,expectedResponses:prior.expected_responses,status:prior.status,replayed:true};}}
+  if(options.requestId){const [prior]=await q('SELECT r.*,t.message FROM meeting_rounds r JOIN meeting_turns t ON t.id=r.chairman_turn_id AND t.user_id=r.user_id WHERE r.user_id=$1 AND r.meeting_id=$2 AND r.client_request_id=$3',[user.id,meetingId,options.requestId]);if(prior){if(prior.source_round_id||prior.message!==text||prior.requested_contact_id!==(options.contactId||null))throw Error('Request reference already used.');return {roundId:prior.id,expectedResponses:prior.expected_responses,status:prior.status,replayed:true};}}
   const active=(await q("SELECT id FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 AND status IN ('pending','running') FOR UPDATE",[meetingId,user.id]))[0];
   if(active&&!options.interrupt)throw Error('The board is still discussing the previous round. Interrupt to take the floor.');
   if(active)await q("UPDATE meeting_rounds SET status='interrupted',interrupted_at=now(),completed_at=now(),worker_token=NULL,worker_lease_until=NULL WHERE id=$1 AND user_id=$2",[active.id,user.id]);
@@ -260,6 +260,23 @@ export async function meetingSpeak(user,meetingId,text,options={}){
   await q('UPDATE meeting_turns SET round_id=$1 WHERE id=$2 AND user_id=$3',[round.id,chairmanTurn.id,user.id]);
   if(active){await q('UPDATE meeting_rounds SET interrupted_by=$1 WHERE id=$2 AND user_id=$3',[round.id,active.id,user.id]);await q('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,w.id,'meeting-interrupted',m.title,'Chairman redirected the discussion; saved responses retained.']);}
   return {roundId:round.id,chairmanTurn,expectedResponses:round.expected_responses,status:round.status};
+ });
+}
+export async function continueBoardDebate(user,meetingId,sourceRoundId){
+ return transaction(async q=>{
+  const [m]=await q('SELECT * FROM meetings WHERE id=$1 AND user_id=$2 FOR UPDATE',[meetingId,user.id]);
+  if(!m||m.status==='concluded')throw Error('Meeting unavailable');
+  const [source]=await q('SELECT * FROM meeting_rounds WHERE id=$1 AND meeting_id=$2 AND user_id=$3',[sourceRoundId,meetingId,user.id]);
+  if(!source)throw Error('Meeting round unavailable');
+  const [prior]=await q('SELECT * FROM meeting_rounds WHERE source_round_id=$1 AND user_id=$2 AND meeting_id=$3',[source.id,user.id,m.id]);
+  if(prior)return {roundId:prior.id,status:prior.status,expectedResponses:prior.expected_responses,replayed:true};
+  const [latest]=await q('SELECT id FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at DESC,id DESC LIMIT 1',[m.id,user.id]);
+  if(latest?.id!==source.id||source.status!=='completed'||source.debate_depth>=2)throw Error('Only the latest completed discussion can continue, up to two follow-up rounds.');
+  const people=await q('SELECT id FROM contacts WHERE user_id=$1 AND world_id=$2 AND id=ANY($3::uuid[])',[user.id,m.world_id,m.attendees]);
+  if(people.length<2)throw Error('At least two executives are required to continue debate.');
+  const [round]=await q('INSERT INTO meeting_rounds(id,user_id,world_id,meeting_id,chairman_turn_id,expected_responses,source_round_id,debate_depth) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[uid(),user.id,m.world_id,m.id,source.chairman_turn_id,people.length,source.id,source.debate_depth+1]);
+  await q('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,m.world_id,'meeting-discussion',m.title,'Executives were invited to continue the debate without a new Chairman statement.']);
+  return {roundId:round.id,status:round.status,expectedResponses:round.expected_responses};
  });
 }
 export async function runMeetingRound(roundId,userId){
@@ -273,7 +290,8 @@ export async function runMeetingRound(roundId,userId){
   if(!m||!w||!user)throw Error('Meeting context unavailable');
   const allContacts=await sql('SELECT * FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],id)',[userId,m.attendees]);
   const contacts=selectParticipants(allContacts,round.requested_contact_id);
-  const prior=await sql('SELECT speaker,message FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND created_at<=(SELECT created_at FROM meeting_turns WHERE id=$3 AND user_id=$2) ORDER BY created_at DESC LIMIT 24',[m.id,userId,round.chairman_turn_id]);
+  if(round.debate_depth%2===1)contacts.reverse();
+  const prior=round.source_round_id?await sql('SELECT speaker,message FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND created_at<=$3 AND round_id IS DISTINCT FROM $4 ORDER BY created_at DESC,id DESC LIMIT 24',[m.id,userId,round.created_at,round.id]):await sql('SELECT speaker,message FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND created_at<=(SELECT created_at FROM meeting_turns WHERE id=$3 AND user_id=$2) ORDER BY created_at DESC,id DESC LIMIT 24',[m.id,userId,round.chairman_turn_id]);
   const history=prior.reverse();
   const existing=await sql('SELECT contact_id,speaker,message FROM meeting_turns WHERE round_id=$1 AND user_id=$2 AND contact_id IS NOT NULL ORDER BY created_at,id',[roundId,userId]);
   history.push(...existing.map(x=>({speaker:x.speaker,message:x.message})));
@@ -284,7 +302,7 @@ export async function runMeetingRound(roundId,userId){
    if(!await renewMeetingWorker(userId,roundId,workerToken))return {id:roundId,status:'superseded'};
    try{
     const context=await characterPrompt(user,person,history.map(turn=>({direction:turn.speaker,body:turn.message})),w);
-    const prompt=buildMeetingPrompt({meetingTitle:m.title,empireName:w.name,person,attendees:allContacts,history});
+    const prompt=buildMeetingPrompt({meetingTitle:m.title,empireName:w.name,person,attendees:allContacts,history,followUp:!!round.source_round_id});
     const reply=await ask(context+' You are a distinct fictional executive in a private board meeting. Be candid, realistic and evidence-led. Keep spoken replies conversational and concise, normally two or three short sentences. Do not invent financial facts or completed actions.',prompt,{fallback:null});
     if(!reply||typeof reply!=='string'||!reply.trim())continue;
     const message=reply.trim().slice(0,1800);
@@ -296,7 +314,7 @@ export async function runMeetingRound(roundId,userId){
   }
   const finished=await finishMeetingRound(userId,m.id,roundId,null,workerToken);
   if(!finished)return {id:roundId,status:'interrupted'};
-  await sql('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),userId,w.id,'meeting-discussion',m.title,user.name+' addressed the meeting; '+finished.responses_saved+' of '+finished.expected_responses+' executives responded.']);
+  await sql('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),userId,w.id,'meeting-discussion',m.title,(round.source_round_id?'Executive follow-up debate; ':user.name+' addressed the meeting; ')+finished.responses_saved+' of '+finished.expected_responses+' executives responded.']);
   return finished;
  }catch(error){
   await finishMeetingRound(userId,round.meeting_id,roundId,String(error.message||'Meeting workflow failed').slice(0,500),workerToken);
@@ -304,10 +322,10 @@ export async function runMeetingRound(roundId,userId){
  }
 }
 export async function meetingRounds(user,meetingId){
- return sql('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at,requested_contact_id,interrupted_at,worker_attempts FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 5',[meetingId,user.id]);
+ return sql('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at,requested_contact_id,interrupted_at,worker_attempts,source_round_id,debate_depth FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 5',[meetingId,user.id]);
 }
 export async function meetingRoundStatus(user,meetingId,roundId){
- return one('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at,requested_contact_id,interrupted_at,worker_attempts FROM meeting_rounds WHERE id=$1 AND meeting_id=$2 AND user_id=$3',[roundId,meetingId,user.id]);
+ return one('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at,requested_contact_id,interrupted_at,worker_attempts,source_round_id,debate_depth FROM meeting_rounds WHERE id=$1 AND meeting_id=$2 AND user_id=$3',[roundId,meetingId,user.id]);
 }
 export async function endMeeting(user,id){
  const m=await one('SELECT * FROM meetings WHERE id=$1 AND user_id=$2',[id,user.id]);if(!m)throw Error('Meeting unavailable');if(m.status==='concluded')return {minutes:m.minutes};

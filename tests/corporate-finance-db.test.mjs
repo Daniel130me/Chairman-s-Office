@@ -294,6 +294,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(transferSnap.facilities.find(f=>f.id===receive.id).outstanding,'1.00');
   assert.equal(transferSnap.facilities.find(f=>f.id===pay.id).outstanding,'0.00');
   assert.equal(transferSnap.group.balanceCheck,'0.00');
+  await assert.rejects(()=>sql("UPDATE intercompany_facilities SET purpose='tampered' WHERE id=$1",[receive.id]),/read-only/);
 
   // Simulate 72 hours of absence plus the current UTC day using a second tenant.
   // This exercises the real financial catch-up code without waiting three days.
