@@ -68,6 +68,13 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   await assert.rejects(()=>adjustInvestment(user,acquired.id,{kind:'impairment',amount:'76',reason:'Unsupported write-down',operationKey:uid()}),/impairment review/);
   await adjustInvestment(user,acquired.id,{kind:'impairment',amount:'25',reason:'Documented goodwill loss',operationKey:uid()});
   snap=await corporateFinanceSnapshot(user.id);assert.equal(snap.group.goodwill,'50.00');assert.equal(snap.group.balanceCheck,'0.00');
+  const before=snap.group;
+  const terms={kind:'disposal',stakeSold:'10',proceeds:'50',reason:'Approved external minority sale retaining control',operationKey:uid()};
+  await assert.rejects(()=>adjustInvestment(user,acquired.id,{...terms,stakeSold:'25'}),/retain more than 50/);
+  const sale=await adjustInvestment(user,acquired.id,terms);assert.equal((await adjustInvestment(user,acquired.id,terms)).id,sale.id);
+  snap=await corporateFinanceSnapshot(user.id);assert.equal(snap.group.goodwill,'50.00');assert.equal(snap.group.nonControllingInterest,'105.00');assert.equal(snap.group.netIncome,before.netIncome);assert.equal(snap.group.controlSaleGainsReclassified,'13.34');assert.equal(snap.group.balanceCheck,'0.00');
+  const [sub]=await sql('SELECT ownership_percentage FROM companies WHERE id=$1',[completed.target_company_id]);assert.equal(sub.ownership_percentage,'65.00');
+  assert.equal(snap.holdings.find(x=>x.id===acquired.id).carrying_amount,'238.34');
  }finally{
   await sql('DELETE FROM intercompany_facilities WHERE user_id=$1',[user.id]);
   await sql('DELETE FROM users WHERE id=ANY($1::uuid[])',[[user.id,other.id]]);
