@@ -116,3 +116,5 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Implemented reviewed transfer of open disputes, partial settlements, standstills and competitive sourcing requests as immutable historical records, with exact buyer assumption evidence and no ongoing seller collection. Inconsistent records remain blocked. Added PostgreSQL regressions, archived UI controls, read-only invoice retries and stale installment rejection; verification pending.
 
 - [x] PWA v6: notification expiration rechecked on click, malformed payload fallback, acknowledged existing-window navigation with cold-window fallback, bounded/cancellable reconnect probes, and foreground-aware procurement/settlement polling. Added notification behavior tests. Fresh automated verification and physical-device acceptance remain required.
+
+- Added shared safe rich-text rendering for business briefs, messages, group conversations, mail, activity, documents, boardroom replies and selected reports. Markdown tables, emphasis, lists and line breaks are formatted without interpreting HTML. Existing stored records remain unchanged.

@@ -102,3 +102,28 @@
 @media(max-height:600px) and (max-width:649px){.lock-time{font-size:64px;letter-spacing:-3px}.lock-screen{padding-top:48px}.homescreen{padding-top:34px}.home-clock{font-size:54px}.app-drawer{top:8%}}
 .pwa-update-notice{position:absolute;z-index:64;bottom:35px;left:12px;right:12px;display:flex;gap:8px;align-items:center;background:#19334e;color:#fff;border-radius:12px;padding:8px 12px;font-size:12px;box-shadow:0 3px 16px #0004}.pwa-update-notice button{margin-left:auto;white-space:nowrap;color:inherit;background:transparent;border:1px solid currentColor;border-radius:7px;padding:5px 8px}
 @media(prefers-reduced-motion:reduce){.phone-environment *{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
+
+/* Shared, inert rich-text formatting across executive conversations and reports. */
+.rich-text{min-width:0;max-width:100%;font-size:inherit;line-height:1.55;overflow-wrap:anywhere;color:inherit}
+.rich-text p,.bubble .rich-text p,.detail-section .rich-text p{margin:0 0 .65em;white-space:pre-wrap;font-size:inherit;line-height:inherit;color:inherit}
+.rich-text > :last-child{margin-bottom:0!important}
+.rich-text h3,.rich-text h4,.rich-text h5,.rich-text h6{margin:.85em 0 .4em;font-size:1.12em;line-height:1.35;font-weight:750;color:inherit}
+.rich-text strong{font-weight:750}
+.rich-text ul,.rich-text ol{padding-inline-start:1.4em;margin:.5em 0 .8em;list-style-position:outside}
+.rich-text li{margin:.28em 0;white-space:pre-wrap}
+.rich-text ul{list-style-type:disc}.rich-text ol{list-style-type:decimal}
+.rich-text blockquote{margin:.6em 0;padding:.3em .8em;border-inline-start:3px solid currentColor;white-space:pre-wrap}
+.rich-text pre,.document-paper .rich-text pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-family:monospace;background:#7f8ea214;padding:.7em;border-radius:7px;margin:.6em 0}
+.rich-text code{font-family:monospace;font-size:.92em;overflow-wrap:anywhere}
+.rich-text a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.rich-text hr{border:0;border-top:1px solid #8995a45c;margin:.9em 0}
+.rich-text .rich-table-scroll{width:100%;max-width:100%;overflow-x:auto;margin:.7em 0 1em;border:1px solid #8390a45c;border-radius:8px;overscroll-behavior-inline:contain}
+.rich-text table{border-collapse:collapse;width:100%;font-size:inherit;line-height:1.45;min-width:0}
+.rich-text th,.rich-text td{padding:.65em .75em;border-bottom:1px solid #8390a43f;vertical-align:top;text-align:left;white-space:normal;overflow-wrap:anywhere;color:inherit}
+.rich-text th{font-weight:750;background:#8390a41c}
+.rich-text th+th,.rich-text td+td{border-inline-start:1px solid #8390a43f}
+.rich-text tr:last-child td{border-bottom:0}.rich-text td:first-child{min-width:6.5em}.rich-text td:last-child{min-width:9em}
+.bubble:has(.rich-table-scroll){width:100%;max-width:100%}.bubble{min-width:0;overflow-wrap:anywhere}.bubble .rich-text{font-size:13px;line-height:1.6}
+.speaker-turn>div{min-width:0;max-width:100%}
+.document-rich-text{margin:25px 0;font-family:Georgia,serif;font-size:14px;line-height:1.75;color:#3a465a}
+@media(max-width:420px){.document-paper{margin-inline:10px;padding-inline:16px}.rich-text th,.rich-text td{padding:.55em .5em}}
