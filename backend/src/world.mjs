@@ -97,7 +97,7 @@ async function characterPrompt(user,contact,history,world){
 async function classifyBusinessAction(user,contact,body,operationKeyValue){
  if(contact.kind!=='internal'||!/\b(hire|recruit|fire|terminate|dismiss|expense|spend|pay|approve|contract|assign|delegate|investigation|investigate)\b/i.test(body))return null;
  const [companies,employees,contracts,executives]=await Promise.all([
-  sql('SELECT id,name,sector FROM companies WHERE user_id=$1',[user.id]),
+  sql('SELECT id,name,sector FROM companies WHERE user_id=$1 AND disposed_at IS NULL',[user.id]),
   sql("SELECT e.id,p.name,e.job_title,e.status FROM employment_records e JOIN contacts p ON p.id=e.contact_id AND p.user_id=e.user_id WHERE e.user_id=$1 AND e.status='active'",[user.id]),
   sql("SELECT id,title,counterparty,status,value FROM business_contracts WHERE user_id=$1 AND status='draft'",[user.id]),
   sql("SELECT id,name,title,company FROM contacts WHERE user_id=$1 AND kind='internal'",[user.id])
