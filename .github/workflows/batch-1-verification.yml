@@ -48,5 +48,7 @@ jobs:
           node scripts/migrate.mjs
       - name: Corporate finance database transactions
         run: RUN_CORPORATE_FINANCE_DB_TESTS=1 node --test tests/corporate-finance-db.test.mjs
+      - name: Advanced operations database transactions
+        run: RUN_ADVANCED_OPERATIONS_DB_TESTS=1 node --test tests/advanced-operations-db.test.mjs
       - name: Verify production build
         run: npm run build
