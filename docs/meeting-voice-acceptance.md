@@ -18,7 +18,7 @@ Provider references:
 - https://developers.openai.com/api/reference/resources/realtime/subresources/client_secrets/methods/create
 
 ## Acceptance (record measured results, do not assume)
-1. Sign in as independent test accounts; confirm one account cannot mint a session for another account's meeting or a concluded meeting.
+1. Sign in as independent test accounts; confirm one account cannot mint a session for another account's meeting or a concluded meeting. Verify the local monitor track remains enabled while the cloned outbound track is gated until the data channel opens; verify ICE gathering completes before SDP exchange and cancels on teardown.
 2. With the flag disabled, verify the option is hidden and direct endpoint calls cannot mint a credential. With it enabled, decline the consent prompt and verify the microphone is not opened.
 3. On Android Chrome, iPhone Safari PWA, and desktop Chrome: connect with headset and speakerphone. Verify interim captions, final transcripts, numbers, accents, silence, and permission denial.
 4. Interrupt an executive mid-playback. Confirm output stops, old worker cannot append after the new remark, and the intended executive answers. Measure time from last voiced sound to first audible reply (target <= 3 seconds median, <= 6 seconds p95 under a healthy network; targets, not achieved results).
