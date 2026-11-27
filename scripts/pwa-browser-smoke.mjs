@@ -15,7 +15,7 @@ try{
  const manifest=await (await fetch(base+'/manifest.webmanifest')).json();assert.equal(manifest.display,'standalone');assert.equal(manifest.start_url,'/');assert.ok(manifest.icons.some(i=>i.sizes==='192x192'));assert.ok(manifest.icons.some(i=>i.sizes==='512x512'));
  browser=await chromium.launch({headless:true});context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'allow'});
  const user={id:'11111111-1111-4111-8111-111111111111',name:'PWA Test',email:'fixture@example.invalid'};
- const state={world:{id:'22222222-2222-4222-8222-222222222222',name:'PWA smoke empire',region:'Test region'},contacts:[],invites:[],threads:[],events:[],companies:[],meetings:[],messages:[],documents:[],settings:{theme:'dark',quiet_enabled:false,max_daily:4},operations:{}};
+ const state={world:{id:'22222222-2222-4222-8222-222222222222',name:'PWA smoke empire',region:'Test region'},contacts:[],invites:[],threads:[],events:[],companies:[],meetings:[],messages:[],documents:[{id:'33333333-3333-4333-8333-333333333333',title:'Formatting fixture',kind:'executive brief',created_at:'2026-11-27T12:00:00Z',body:'**Decision brief**\n<table onclick="window.__formattingUnsafe=true"><tr><th>Option</th><th>Potential Gains</th><th>Risks</th></tr><tr><td>Acquire PulseWave</td><td>- Immediate access<br>- Cross-sell opportunities</td><td>Integration delays</td></tr></table>\n**Recommendation:** Review first.'}],settings:{theme:'dark',quiet_enabled:false,max_daily:4},operations:{}};
  let failBoot=true,stateRequests=0;
  await context.route('**/api/**',async route=>{const path=new URL(route.request().url()).pathname;let payload={ok:true},status=200;
   if(path==='/api/state'){stateRequests++;if(failBoot){status=503;payload={error:'Test connection unavailable'};}else payload={user,state};}
@@ -56,6 +56,17 @@ try{
  await page.getByText('App & connection',{exact:true}).waitFor().catch(async()=>{const details=await page.evaluate(()=>({online:navigator.onLine,controlled:!!navigator.serviceWorker.controller,url:location.href,ready:document.readyState}));throw new Error('Settings deep link did not restore after reconnect. '+JSON.stringify(details)+' Response: '+(settingsResponse?.status()??'none')+' Server: '+serverOutput+' Diagnostics: '+JSON.stringify(diagnostics)+' Body: '+(await page.locator('body').innerText()).slice(0,1000));});
  assert.equal(diagnostics.pageErrors.length,0,'Settings and PWA must not throw runtime errors: '+JSON.stringify(diagnostics.pageErrors));
  await page.getByText('Private records are not saved to persistent browser storage.',{exact:false}).waitFor();
+ await page.goto(base+'/?app=documents',{waitUntil:'domcontentloaded'});
+ await page.getByRole('button',{name:/Formatting fixture/}).click();
+ const report=page.locator('.document-rich-text');
+ await report.getByRole('table').waitFor();
+ assert.equal(await report.getByRole('columnheader').count(),3);
+ assert.equal(await report.getByRole('listitem').count(),2);
+ assert.ok((await report.getByRole('cell',{name:'Integration delays'}).innerText()).includes('Integration delays'));
+ assert.equal(await report.locator('[onclick]').count(),0);
+ assert.ok(!(await report.innerText()).includes('<table>'));
+ await report.getByRole('table').click();
+ assert.equal(await page.evaluate(()=>!!window.__formattingUnsafe),false);
  const keys=await page.evaluate(async()=>{const result=[];for(const name of await caches.keys()){if(!name.startsWith('chairmans-office-'))continue;const cache=await caches.open(name);for(const req of await cache.keys())result.push(new URL(req.url).pathname);}return result;});
  assert.ok(keys.includes('/offline.html'));assert.ok(keys.every(p=>p.startsWith('/_next/static/')||['/offline.html','/icon-192.png','/icon-512.png','/apple-touch-icon.png','/manifest.webmanifest'].includes(p)));assert.ok(stateRequests>=2);
  await page.setViewportSize({width:360,height:480});const small=await page.locator('.phone-screen').boundingBox();assert.ok(small.height<=480.5,'Small phone viewport must not overflow');

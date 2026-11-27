@@ -127,3 +127,12 @@
 .speaker-turn>div{min-width:0;max-width:100%}
 .document-rich-text{margin:25px 0;font-family:Georgia,serif;font-size:14px;line-height:1.75;color:#3a465a}
 @media(max-width:420px){.document-paper{margin-inline:10px;padding-inline:16px}.rich-text th,.rich-text td{padding:.55em .5em}}
+
+.rich-text .rich-cell-content{font:inherit;line-height:inherit;white-space:normal}
+.rich-text .rich-cell-content p{white-space:pre-wrap}
+.rich-text .rich-cell-content ul,.rich-text .rich-cell-content ol{padding-inline-start:1.15em;margin:.1em 0}
+.rich-text .rich-cell-content li{margin:.3em 0;white-space:normal}
+.rich-text table caption{font-weight:650;text-align:left;padding:.7em}
+.rich-text th,.rich-text td{min-width:7em}
+.rich-text table:has(tr> :nth-child(3)) td:nth-child(n+2){min-width:13em}
+.bubble .rich-table-scroll{max-width:100%;scrollbar-width:thin}

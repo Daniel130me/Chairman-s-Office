@@ -1,5 +1,5 @@
-// Small, deterministic Markdown subset for untrusted fictional business records.
-// No HTML interpretation, external media, executable URLs, or raw DOM injection.
+// Safe Markdown and allowlisted HTML formatting for untrusted business records.
+import {htmlSegments} from './html-rich-text.mjs';
 const normalize=value=>String(value??'').replace(/\r\n?/g,'\n');
 const cells=line=>line.trim().replace(/^\|/,'').replace(/\|$/,'').split(/(?<!\\)\|/).map(c=>c.trim().replace(/\\\|/g,'|'));
 const separator=row=>row.length>=2&&row.every(c=>/^:?-{3,}:?$/.test(c));
@@ -21,7 +21,7 @@ function recoverFlatTables(value){
   return [line.slice(0,start).trim(),...groups,line.slice(end+1).trim()].filter(Boolean).join('\n');
  }).join('\n');
 }
-export function parseRichText(value){
+function parseMarkdown(value){
  const lines=recoverFlatTables(normalize(value)).split('\n'),blocks=[];
  let i=0;
  while(i<lines.length){
@@ -56,6 +56,20 @@ export function parseRichText(value){
  }
  return blocks;
 }
+// Preserve fenced code literally. Outside code fences, recover HTML tables
+// before Markdown parsing, including mixed Markdown/HTML reports.
+export function parseRichText(value){
+ const blocks=[];let pending=[],fence=null,code=[];
+ function flush(){if(!pending.length)return;for(const s of htmlSegments(pending.join('\n'))){if(s.type==='text')blocks.push(...parseMarkdown(s.text));else if(s.rows.length)blocks.push(s);}pending=[];}
+ for(const line of normalize(value).split('\n')){
+  const match=/^\s*(`{3,}|~{3,})/.exec(line);
+  if(fence){if(match&&match[1][0]===fence[0]&&match[1].length>=fence.length){blocks.push({type:'code',text:code.join('\n')});fence=null;code=[];}else code.push(line);}
+  else if(match){flush();fence=match[1];code=[];}
+  else pending.push(line);
+ }
+ if(fence)blocks.push({type:'code',text:code.join('\n')});
+ flush();return blocks;
+}
 export function inlineTokens(value,depth=0){
  const input=normalize(value);
  if(depth>=5)return [{type:'text',text:input}];
@@ -73,5 +87,5 @@ export function inlineTokens(value,depth=0){
  return out;
 }
 export function previewText(value){
- return normalize(value).replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/^\s*#{1,6}\s+/gm,'').replace(/\*\*|__|~~|`/g,'').replace(/\|/g,' ').replace(/\s+/g,' ').trim();
+ return htmlSegments(normalize(value)).map(b=>b.type==='text'?b.text:b.rows.flat().map(c=>c.text).join(' ')).join(' ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/^\s*#{1,6}\s+/gm,'').replace(/\*\*|__|~~|`/g,'').replace(/\|/g,' ').replace(/\s+/g,' ').trim();
 }
