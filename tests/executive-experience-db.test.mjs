@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sql,uid,database} from '../backend/src/db.mjs';
-import {checkpointCall,recoverAbandonedCalls,monitorTravel,requestConcierge,resolveDisruption,executiveTravelSnapshot} from '../lib/executive-experience.mjs';
+import {proposeRebooking,decideRebooking} from '../lib/travel-rebooking.mjs';
+import {createTravelBooking,confirmTravelBooking} from '../lib/travel.mjs';
+import {economySnapshot} from '../lib/economy.mjs';
+import {reportDisruption,checkpointCall,recoverAbandonedCalls,monitorTravel,requestConcierge,resolveDisruption,executiveTravelSnapshot} from '../lib/executive-experience.mjs';
 test('executive call and travel persistence with tenant isolation',{skip:process.env.RUN_EXECUTIVE_EXPERIENCE_DB_TESTS!=='1',timeout:60000},async()=>{
  assert.match(process.env.DATABASE_URL||'',/@127\.0\.0\.1:5432\/chairman_ci\?/);
  const u={id:uid()},other={id:uid()},world=uid(),contact=uid(),call=uid(),trip=uid();
@@ -25,5 +28,17 @@ test('executive call and travel persistence with tenant isolation',{skip:process
   await resolveDisruption(u,snapshot.disruptions[0].id,{reason:'Confirmed alternative transport arrangement'});
   const j=await requestConcierge(u,trip,{operationKey:uid()});assert.equal(j.status,'pending');
   assert.equal((await requestConcierge(u,trip,{operationKey:uid()})).id,j.id);
+  const company=uid();
+  await sql("INSERT INTO companies(id,user_id,world_id,name,sector,valuation,cash,revenue) VALUES($1,$2,$3,'Travel company','Services',10000,1000,0)",[company,u.id,world]);
+  const booking=await createTravelBooking(u,trip,{bookingType:'flight',provider:'Fictional airline',description:'Original ticket',amount:'100',paymentSource:'company',companyId:company,operationKey:uid()});
+  await confirmTravelBooking(u,booking.id,{reason:'Approved original booking'});
+  const issue=await reportDisruption(u,trip,{bookingId:booking.id,kind:'cancellation',description:'Fictional provider cancelled departure.',proposedAction:'Arrange replacement.',operationKey:uid()});
+  const proposal=await proposeRebooking(u,issue.id,{provider:'Replacement carrier',description:'Alternative ticket',amount:'150',fee:'10',reason:'Recorded fictional replacement quote',operationKey:uid()});
+  assert.equal((await economySnapshot(u.id)).financialStatements[0].cash,'900.00');
+  await assert.rejects(()=>decideRebooking(other,proposal.id,{decision:'approved',reason:'Unauthorized'}),/unavailable/);
+  const approved=await decideRebooking(u,proposal.id,{decision:'approved',reason:'Replacement approved'});
+  assert.equal((await decideRebooking(u,proposal.id,{decision:'approved',reason:'Replacement approved'})).new_booking_id,approved.new_booking_id);
+  assert.equal((await economySnapshot(u.id)).financialStatements[0].cash,'740.00');
+  const [old]=await sql('SELECT status FROM travel_bookings WHERE id=$1',[booking.id]);assert.equal(old.status,'cancelled');
  }finally{await sql('DELETE FROM users WHERE id=ANY($1::uuid[])',[[u.id,other.id]]);await database().end();}
 });
