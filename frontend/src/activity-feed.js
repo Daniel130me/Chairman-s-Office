@@ -94,6 +94,7 @@ export function buildActivityFeed(state = {}, user = {}) {
   };
 
   const eventTargets = {
+    'acquisition-payable-paid':'acquisitions',
     'dispute-plan-revised':'operations',
     'dispute-plan-created':'operations','dispute-installment-paid':'operations','dispute-installment-overdue':'operations','dispute-plan-cancelled':'operations',
     'supplier-rfq-opened':'inventory','supplier-rfq-response':'inventory','supplier-rfq-counter':'inventory','supplier-rfq-awarded':'inventory','supplier-rfq-cancelled':'inventory','acquisition-allocation':'acquisitions','travel-rebooking-proposed':'travel','travel-rebooking-approved':'travel','travel-rebooking-declined':'travel','travel-replacement-unavailable':'travel',
