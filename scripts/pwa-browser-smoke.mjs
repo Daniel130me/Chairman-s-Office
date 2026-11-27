@@ -15,10 +15,11 @@ try{
  const manifest=await (await fetch(base+'/manifest.webmanifest')).json();assert.equal(manifest.display,'standalone');assert.equal(manifest.start_url,'/');assert.ok(manifest.icons.some(i=>i.sizes==='192x192'));assert.ok(manifest.icons.some(i=>i.sizes==='512x512'));
  browser=await chromium.launch({headless:true});context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'allow'});
  const user={id:'11111111-1111-4111-8111-111111111111',name:'PWA Test',email:'fixture@example.invalid'};
- const state={world:{id:'22222222-2222-4222-8222-222222222222',name:'PWA smoke empire',region:'Test region'},contacts:[],invites:[],threads:[],events:[],companies:[],meetings:[],messages:[],documents:[{id:'33333333-3333-4333-8333-333333333333',title:'Formatting fixture',kind:'executive brief',created_at:'2026-11-27T12:00:00Z',body:'**Decision brief**\n<table onclick="window.__formattingUnsafe=true"><tr><th>Option</th><th>Potential Gains</th><th>Risks</th></tr><tr><td>Acquire PulseWave</td><td>- Immediate access<br>- Cross-sell opportunities</td><td>Integration delays</td></tr></table>\n**Recommendation:** Review first.'}],settings:{theme:'dark',quiet_enabled:false,max_daily:4},operations:{}};
- let failBoot=true,stateRequests=0;
+ const state={world:{id:'22222222-2222-4222-8222-222222222222',name:'PWA smoke empire',region:'Test region'},contacts:[{id:'44444444-4444-4444-8444-444444444444',name:'Test Executive',title:'Chief of Staff',kind:'internal',company:'PWA smoke empire'}],invites:[],threads:[],events:[],companies:[{id:'55555555-5555-4555-8555-555555555555',name:'PWA validation company with a deliberately long name',sector:'Technology',cash:1000,revenue:0,valuation:1000}],meetings:[],messages:[],documents:[{id:'33333333-3333-4333-8333-333333333333',title:'Formatting fixture',kind:'executive brief',created_at:'2026-11-27T12:00:00Z',body:'**Decision brief**\n<table onclick="window.__formattingUnsafe=true"><tr><th>Option</th><th>Potential Gains</th><th>Risks</th></tr><tr><td>Acquire PulseWave</td><td>- Immediate access<br>- Cross-sell opportunities</td><td>Integration delays</td></tr></table>\n**Recommendation:** Review first.'}],settings:{theme:'dark',quiet_enabled:false,max_daily:4},operations:{}};
+ let failBoot=true,stateRequests=0,investigationRequests=0,failInvestigation=true;
  await context.route('**/api/**',async route=>{const path=new URL(route.request().url()).pathname;let payload={ok:true},status=200;
   if(path==='/api/state'){stateRequests++;if(failBoot){status=503;payload={error:'Test connection unavailable'};}else payload={user,state};}
+  else if(path==='/api/investigations'&&route.request().method()==='POST'){investigationRequests++;const body=route.request().postDataJSON();assert.equal(body.title,'Fixture investigation');assert.equal(body.allegation,'Evidence needs review.');if(failInvestigation){status=409;payload={error:'Fixture validation error'};}else payload={case:{id:'fixture-case'}};}
   else if(path==='/api/invites/pending')payload={invites:[]};
   else if(path==='/api/providers')payload={providers:[]};
   else if(path==='/api/push/status')payload={devices:0,configured:false};
@@ -67,6 +68,35 @@ try{
  assert.ok(!(await report.innerText()).includes('<table>'));
  await report.getByRole('table').click();
  assert.equal(await page.evaluate(()=>!!window.__formattingUnsafe),false);
+ // Exercise the actual selected form on narrow and normal phone widths.
+ await page.goto(base+'/?app=investigations',{waitUntil:'domcontentloaded'});
+ const caseForm=page.locator('form.form-card').filter({hasText:'Open a case'});
+ await caseForm.getByRole('button',{name:'Open investigation'}).waitFor();
+ await caseForm.getByRole('button',{name:'Open investigation'}).click();
+ assert.equal(investigationRequests,0,'Missing required fields must not reach the API');
+ for(const width of [320,360,390]){
+  await page.setViewportSize({width,height:844});
+  const geometry=await caseForm.evaluate(el=>{const container=el.getBoundingClientRect();return [...el.querySelectorAll('label>input,label>select,label>textarea')].map(f=>{const r=f.getBoundingClientRect(),label=f.parentElement.getBoundingClientRect(),style=getComputedStyle(f);return {width:r.width,labelWidth:label.width,height:r.height,left:r.left,right:r.right,containerLeft:container.left,containerRight:container.right,fontSize:parseFloat(style.fontSize),display:style.display};});});
+  assert.equal(geometry.length,4);
+  for(const field of geometry){assert.ok(field.width>=field.labelWidth-1&&field.right<=field.containerRight+1&&field.left>=field.containerLeft-1,'Fields must fit their card at '+width);assert.ok(field.height>=44&&field.fontSize>=16&&field.display==='block','Field must be usable on mobile');}
+ }
+ await caseForm.getByLabel('Case title').fill('Fixture investigation');
+ await caseForm.getByLabel('Concern or allegation').fill('Evidence needs review.');
+ await caseForm.getByRole('button',{name:'Open investigation'}).click();
+ await caseForm.getByRole('alert').filter({hasText:'Fixture validation error'}).waitFor();
+ assert.equal(await caseForm.getByLabel('Case title').inputValue(),'Fixture investigation','Failed submissions retain draft');
+ failInvestigation=false;await caseForm.getByRole('button',{name:'Open investigation'}).click();
+ await page.waitForFunction(()=>document.querySelector('form.form-card input')?.value==='');
+ assert.equal(investigationRequests,2);
+ // Calendar exercises date inputs and chip buttons without submitting live data.
+ await page.goto(base+'/?app=calendar',{waitUntil:'domcontentloaded'});
+ await page.locator('.app-header button.icon-circle').last().click();
+ const schedule=page.locator('form.form-card').filter({hasText:'Schedule a meeting'});
+ await schedule.getByLabel('Meeting title').waitFor();
+ const attendee=schedule.getByRole('button',{name:'Test Executive'});
+ await attendee.click();assert.equal(await attendee.getAttribute('aria-pressed'),'true');
+ await schedule.getByRole('button',{name:'Cancel',exact:true}).click();await schedule.waitFor({state:'detached'});
+ assert.equal(diagnostics.pageErrors.length,0,'Form checks must not throw runtime errors');
  const keys=await page.evaluate(async()=>{const result=[];for(const name of await caches.keys()){if(!name.startsWith('chairmans-office-'))continue;const cache=await caches.open(name);for(const req of await cache.keys())result.push(new URL(req.url).pathname);}return result;});
  assert.ok(keys.includes('/offline.html'));assert.ok(keys.every(p=>p.startsWith('/_next/static/')||['/offline.html','/icon-192.png','/icon-512.png','/apple-touch-icon.png','/manifest.webmanifest'].includes(p)));assert.ok(stateRequests>=2);
  await page.setViewportSize({width:360,height:480});const small=await page.locator('.phone-screen').boundingBox();assert.ok(small.height<=480.5,'Small phone viewport must not overflow');
