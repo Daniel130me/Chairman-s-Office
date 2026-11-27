@@ -73,6 +73,7 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [ ] Verify live transcription provider connectivity, low-latency continuous speech-to-speech output, overlapping speech and real-device echo/latency. Executive synthesis remains segmented; see `meeting-voice-acceptance.md`.
 - [ ] Run all automated tests, verify Neon migrations and deployment, reconcile financial state.
 - [ ] Test inbound/outbound calls, callbacks, missed/declined calls, voicemail, voice notes, cross-channel memory and boardroom outcomes.
-- [ ] Test autonomous offline progression (including multi-day absence and duplicate prevention), activity history and every phone app.
+- [x] Added isolated PostgreSQL regression for four due operating days (simulated 72-hour absence), bounded catch-up, concurrent retry, tenant isolation, reconciled ledger and immutable daily observation; CI verification pending.
+- [ ] Test live autonomous offline progression (including multi-day absence and duplicate prevention), activity history and every phone app.
 - [ ] Verify Android/iPhone PWA, notifications, deep links, offline recovery, multi-user isolation, security, backups, performance and monitoring.
 - [ ] Close all deferred scope above or explicitly obtain scope approval before declaring the application complete.

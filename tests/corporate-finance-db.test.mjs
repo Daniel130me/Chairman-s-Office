@@ -202,6 +202,26 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(snap.holdings.find(x=>x.id===nestedHolding.id).status,'exited');
   assert.equal(snap.group.balanceCheck,'0.00');
 
+  // Simulate 72 hours of absence plus the current UTC day using a second tenant.
+  // This exercises the real financial catch-up code without waiting three days.
+  const absentWorld=uid(),absentCompany=uid();
+  await sql("INSERT INTO worlds(id,user_id,name,region,timezone,sectors,chief) VALUES($1,$2,'Absence CI','Fictional','UTC','[]','Chief')",[absentWorld,other.id]);
+  await sql("INSERT INTO companies(id,user_id,world_id,name,sector,valuation,cash,revenue) VALUES($1,$2,$3,'Absence company','Technology',10000,1000,36500)",[absentCompany,other.id,absentWorld]);
+  await economySnapshot(other.id);
+  await sql("UPDATE company_economy SET next_day=(now() AT TIME ZONE 'UTC')::date-3,cost_ratio=0.5 WHERE company_id=$1 AND user_id=$2",[absentCompany,other.id]);
+  assert.equal(await captureGroupAccountHistory(other.id),false);
+  await advanceEconomy(other.id);
+  assert.equal(await captureGroupAccountHistory(other.id),false);
+  await Promise.all([advanceEconomy(other.id),advanceEconomy(other.id)]);
+  await advanceEconomy(other.id);
+  const [days]=await sql("SELECT count(*)::int n,count(DISTINCT effective_at::date)::int dates FROM economy_journal WHERE user_id=$1 AND company_id=$2 AND operation_key LIKE 'operation:%'",[other.id,absentCompany]);
+  assert.equal(days.n,8);assert.equal(days.dates,4);
+  assert.equal(await captureGroupAccountHistory(other.id),true);
+  const absent=(await listGroupAccountHistory(other.id))[0];
+  assert.equal(absent.statement.cash,'1200.00');assert.equal(absent.statement.netIncome,'200.00');assert.equal(absent.statement.balanceCheck,'0.00');
+  assert.equal(absent.perimeter[0].companyId,absentCompany);
+  assert.equal((await listGroupAccountHistory(user.id))[0].statement.cash,'1100.00');
+
  }finally{
   await sql('DELETE FROM intercompany_facilities WHERE user_id=$1',[user.id]);
   await sql('DELETE FROM users WHERE id=ANY($1::uuid[])',[[user.id,other.id]]);
