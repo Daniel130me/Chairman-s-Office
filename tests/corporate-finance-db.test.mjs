@@ -331,12 +331,12 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(reviewed.pendingEconomicCatchup,0);
   assert.equal(reviewed.ownershipWarnings.length,0);
   const closing={start:yesterday,end:yesterday,digest:reviewed.digest,reason:'Reviewed modeled daily financial statements.',confirm:true,operationKey:uid()};
-  const closed=await closeGroupPeriod(other,closing);
-  assert.equal(closed.revision,1);
-  assert.equal((await closeGroupPeriod(other,closing)).id,closed.id);
-  assert.equal((await groupPeriodCloses(other.id,yesterday,yesterday))[0].id,closed.id);
+  const periodCloseRecord=await closeGroupPeriod(other,closing);
+  assert.equal(periodCloseRecord.revision,1);
+  assert.equal((await closeGroupPeriod(other,closing)).id,periodCloseRecord.id);
+  assert.equal((await groupPeriodCloses(other.id,yesterday,yesterday))[0].id,periodCloseRecord.id);
   assert.equal((await groupPeriodCloses(user.id,yesterday,yesterday)).length,0);
-  await assert.rejects(()=>sql("UPDATE group_period_closes SET reason='tampered' WHERE id=$1",[closed.id]),/immutable|read-only/i);
+  await assert.rejects(()=>sql("UPDATE group_period_closes SET reason='tampered' WHERE id=$1",[periodCloseRecord.id]),/immutable|read-only/i);
   assert.equal((await listGroupAccountHistory(user.id))[0].statement.cash,'1100.00');
 
  }finally{
