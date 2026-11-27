@@ -1,3 +1,4 @@
+import {mergeTranscript} from '../../lib/executive-experience-rules.mjs';
 "use step";
 
 import {sql,one,transaction,uid,iso} from './db.mjs';
@@ -219,9 +220,9 @@ export async function startCall(user,contactId,inviteId=null){
 }
 export async function finishCall(user,id,transcript,status='completed'){
  const call=await one('SELECT * FROM calls WHERE id=$1 AND user_id=$2',[id,user.id]);if(!call)throw Error('Call unavailable');if(call.status!=='active')return {summary:call.summary};
- const rows=Array.isArray(transcript)?transcript.filter(x=>x&&typeof x==='object').slice(0,150).map(x=>({role:String(x.role||'speaker').slice(0,30),text:String(x.text||'').slice(0,3000)})):[];
+ const rows=mergeTranscript(call.transcript,transcript);
  const summary=await ask('Summarize this fictional executive conversation precisely: decisions, commitments, risks, follow-ups. Do not invent facts.',JSON.stringify(rows),{fallback:rows.map(r=>r.role+': '+r.text).join(' ').slice(0,1500)||'Call completed; no transcript available.'});
- const updated=await one("UPDATE calls SET ended_at=now(),status=$4,transcript=$1,summary=$2 WHERE id=$3 AND user_id=$5 AND status='active' RETURNING summary",[JSON.stringify(rows),summary,id,status==='failed'?'failed':'completed',user.id]);
+ const updated=await transaction(async q=>{const [latest]=await q('SELECT * FROM calls WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,user.id]);if(!latest||latest.status!=='active')return null;const merged=mergeTranscript(latest.transcript,rows);const finalSummary=merged.length===rows.length?summary:merged.map(r=>r.role+': '+r.text).join(' ').slice(0,3000);return (await q("UPDATE calls SET ended_at=now(),status=$4,transcript=$1,summary=$2 WHERE id=$3 AND user_id=$5 AND status='active' RETURNING summary",[JSON.stringify(merged),finalSummary,id,status==='failed'?'failed':'completed',user.id]))[0];});
  const finalSummary=updated?.summary??(await one('SELECT summary FROM calls WHERE id=$1 AND user_id=$2',[id,user.id]))?.summary;
  if(updated&&rows.length)await queueCharacterMemory({userId:user.id,worldId:call.world_id,contactId:call.contact_id,sourceType:'voice-call',sourceId:id,context:{transcript:rows.slice(-40).map(r=>({role:r.role,text:r.text.slice(0,1200)})),summary:finalSummary,status}}).catch(error=>console.warn('Call memory queue unavailable',error.code||error.name));
  return {summary:finalSummary};
