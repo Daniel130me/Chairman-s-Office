@@ -106,6 +106,14 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   await assert.rejects(()=>sql("INSERT INTO economy_journal(id,user_id,company_id,operation_key,kind,debit,credit,amount,description,actor) VALUES($1,$2,$3,$4,'sale','cash','revenue',1,'unauthorized','fixture')",[uid(),user.id,completed.target_company_id,uid()]),/disposed/);
   await advanceEconomy(user.id);
   assert.ok(!(await economySnapshot(user.id)).financialStatements.some(x=>x.companyId===completed.target_company_id));
+  const exitDeal=await createAcquisition(user,{buyerCompanyId:a,targetName:'Full exit target',targetSector:'Tech',sellerName:'Seller',description:'Small standalone target',purchasePrice:'20',targetValuation:'20',ownershipPercentage:'100',operationKey:uid()});
+  for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,exitDeal.id,{area,status:'cleared',evidence:'Recorded evidence for '+area});
+  await transitionAcquisition(user,exitDeal.id,{status:'approved',reason:'Authorized'});
+  const exitCompany=await transitionAcquisition(user,exitDeal.id,{status:'completed',reason:'Settlement confirmed'});
+  snap=await corporateFinanceSnapshot(user.id);const exitHolding=snap.holdings.find(x=>x.acquisition_id===exitDeal.id);
+  const full=await disposeSubsidiary(user,exitHolding.id,{...exit,stakeSold:'100',proceeds:'25',retainedValue:'0',operationKey:uid()});
+  assert.equal(full.retained_stake,'0.00');assert.equal(full.parent_gain,'5.00');assert.equal(full.group_gain,'5.00');
+  snap=await corporateFinanceSnapshot(user.id);assert.equal(snap.holdings.find(x=>x.id===exitHolding.id).status,'exited');assert.equal(snap.group.balanceCheck,'0.00');
  }finally{
   await sql('DELETE FROM intercompany_facilities WHERE user_id=$1',[user.id]);
   await sql('DELETE FROM users WHERE id=ANY($1::uuid[])',[[user.id,other.id]]);
