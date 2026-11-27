@@ -136,6 +136,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(nestedExit.closing_statement.intercompanyFacilities.length,1);
   const [transferredFacility]=await sql('SELECT transferred_at,transferred_to FROM intercompany_facilities WHERE id=$1',[internalFacility.id]);
   assert.ok(transferredFacility.transferred_at);assert.equal(transferredFacility.transferred_to,exit.buyer);
+  assert.equal((await advanceIntercompany(user,internal)).id,internalFacility.id);
   await assert.rejects(()=>repayIntercompany(user,internalFacility.id,{amount:'1',reason:'Late repayment',operationKey:uid()}),/transferred/);
   const [archivedParent,archivedChild]=await sql('SELECT id,disposed_at FROM companies WHERE id=ANY($1::uuid[]) ORDER BY id',[nestedExit.disposed_company_ids]);
   assert.ok(archivedParent.disposed_at&&archivedChild.disposed_at);
