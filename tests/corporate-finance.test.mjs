@@ -27,3 +27,9 @@ test('investment postings preserve double-entry direction',()=>{
  assert.deepEqual(accounts('investment-impairment'),['expense','investments']);
  assert.deepEqual(accounts('investment-gain'),['cash','revenue']);
 });
+
+test('matched intercompany financing eliminates both sides without changing cash or equity',()=>{
+ const result=consolidateGroup([{id:'a',name:'A'},{id:'b',name:'B'}],[{companyId:'a',assets:'100',cash:'50',liabilities:'0',equity:'100',revenue:'0',expenses:'0'},{companyId:'b',assets:'50',cash:'50',liabilities:'50',equity:'0',revenue:'0',expenses:'0'}],[],[{lender_company_id:'a',borrower_company_id:'b',outstanding:'50'}]);
+ assert.equal(result.assets,'100.00');assert.equal(result.liabilities,'0.00');assert.equal(result.cash,'100.00');assert.equal(result.balanceCheck,'0.00');
+ assert.deepEqual(accounts('intercompany-advance'),['accounts_receivable','cash']);assert.deepEqual(accounts('intercompany-receipt'),['cash','loans_payable']);
+});
