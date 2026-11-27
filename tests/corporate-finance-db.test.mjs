@@ -83,7 +83,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   snap=await corporateFinanceSnapshot(user.id);assert.equal(snap.group.goodwill,'50.00');assert.equal(snap.group.nonControllingInterest,'105.00');assert.equal(snap.group.netIncome,before.netIncome);assert.equal(snap.group.controlSaleGainsReclassified,'13.34');assert.equal(snap.group.balanceCheck,'0.00');
   const [sub]=await sql('SELECT ownership_percentage FROM companies WHERE id=$1',[completed.target_company_id]);assert.equal(sub.ownership_percentage,'65.00');
   assert.equal(snap.holdings.find(x=>x.id===acquired.id).carrying_amount,'238.34');
-  const exit={stakeSold:'45',proceeds:'200',retainedValue:'90',buyer:'Independent fictional buyer',reason:'Documented agreed transfer of corporate control',valuationEvidence:'Recorded fictional sale agreement and retained stake valuation',confirmTransfer:true,operationKey:uid()};
+  const exit={stakeSold:'45',proceeds:'200',retainedValue:'90',buyer:'Independent fictional buyer',reason:'Documented agreed transfer of corporate control',valuationEvidence:'Recorded fictional sale agreement and retained stake valuation',debtAssumptionEvidence:'Signed sale agreement confirms buyer assumes Fictional vendor payable.',confirmTransfer:true,operationKey:uid()};
   const beforeExit=await corporateFinanceSnapshot(user.id);
   const blocker=uid();
   await sql("INSERT INTO business_tasks(id,user_id,world_id,company_id,assignee_id,title,detail,operation_key) SELECT $1,$2,$3,$4,c.id,'Pending task','Open task',$5 FROM contacts c WHERE c.user_id=$2 LIMIT 1",[blocker,user.id,world,completed.target_company_id,uid()]);
@@ -140,7 +140,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   snap=await corporateFinanceSnapshot(user.id);
   const nestedHolding=snap.holdings.find(x=>x.acquisition_id===nestedDeal.id),childHolding=snap.holdings.find(x=>x.acquisition_id===childDeal.id);
   assert.ok(nestedHolding&&childHolding);assert.equal(snap.group.balanceCheck,'0.00');
-  await assert.rejects(()=>disposeSubsidiary(user,nestedHolding.id,{...exit,stakeSold:'100',proceeds:'115',retainedValue:'0',operationKey:uid()}),/buyer assumes the outstanding debt/);
+  await assert.rejects(()=>disposeSubsidiary(user,nestedHolding.id,{...exit,stakeSold:'100',proceeds:'115',retainedValue:'0',debtAssumptionEvidence:'',operationKey:uid()}),/buyer assumes the outstanding debt/);
   const nestedExit=await disposeSubsidiary(user,nestedHolding.id,{...exit,stakeSold:'100',proceeds:'115',retainedValue:'0',debtAssumptionEvidence:'Signed sale agreement and lender consents confirm buyer assumes Nested Bank A and Nested Bank B facilities plus Trade Creditor C payable.',operationKey:uid()});
   assert.equal(nestedExit.retained_stake,'0.00');assert.equal(nestedExit.disposed_company_ids.length,2);assert.match(nestedExit.debt_assumption_evidence,/Nested Bank A.*Nested Bank B/);
   assert.equal(nestedExit.closing_statement.companyCount,2);assert.equal(nestedExit.closing_statement.companies.length,2);
