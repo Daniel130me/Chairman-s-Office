@@ -115,5 +115,5 @@ test('real-world intelligence refresh is connected to the durable world engine a
  assert.match(engine,/refreshRealWorldSignals/);assert.match(engine,/real-world-intelligence/);
  assert.match(world,/realWorldSignalSnapshot/);assert.match(world,/realWorldSignals/);
  assert.match(routes,/intelligence\/refresh/);assert.match(routes,/realWorldRefreshWorkflow/);
- assert.match(activation,/ENGINE_REVISION=25/);
+ assert.match(activation,/ENGINE_REVISION=26/);
 });

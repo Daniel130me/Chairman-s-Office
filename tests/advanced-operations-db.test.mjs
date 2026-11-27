@@ -36,7 +36,8 @@ test('stock, returns, contractual enforcement and settlement reconcile in Postgr
   await processContractObligations(u.id);
   await assert.rejects(()=>transitionContract(u,ct.id,{status:'completed',reason:'Premature'}),/obligations/);
   await completeObligation(u,o.id,{status:'fulfilled',evidence:'Signed record of completed service'});
-  const invoice=await createInvoice(u,{companyId:c,customer:'Customer',description:'Service delivery',amount:'100',operationKey:uid()});
+  const invoiceBody={companyId:c,customer:'Customer',description:'Service delivery',amount:'100',operationKey:uid()};
+  const invoice=await createInvoice(u,invoiceBody);
   const d=await openDispute(u,ct.id,{invoiceId:invoice.id,reason:'Customer contests delivered scope',operationKey:uid()});
   await assert.rejects(()=>payInvoice(u,invoice.id),/dispute/);
   await assert.rejects(()=>resolveDispute(u,d.id,{resolution:'settle',paid:'70',reason:'Agreed settlement'}),/evidence/);
@@ -44,6 +45,9 @@ test('stock, returns, contractual enforcement and settlement reconcile in Postgr
   const settled=await resolveDispute(u,d.id,{resolution:'settle',paid:'70',reason:'Agreed settlement'});
   assert.equal(settled.credited_amount,'30.00');
   assert.equal((await resolveDispute(u,d.id,{resolution:'settle',paid:'70',reason:'Agreed settlement'})).id,settled.id);
+  const cashBeforeRetry=(await economySnapshot(u.id)).financialStatements[0].cash;
+  assert.equal((await createInvoice(u,invoiceBody)).id,invoice.id);
+  assert.equal((await economySnapshot(u.id)).financialStatements[0].cash,cashBeforeRetry,'retry must not post full payment after negotiated settlement');
   snapshot=await economySnapshot(u.id);
   assert.equal(snapshot.financialStatements[0].cash,'1050.00');
   assert.equal(snapshot.financialStatements[0].receivables,'0.00');
@@ -117,6 +121,7 @@ test('stock, returns, contractual enforcement and settlement reconcile in Postgr
   await assert.rejects(()=>reviseDisputePlan(u,plan.id,{...amendment,operationKey:uid()}),/changed/);
   assert.equal((await createDisputePlan(u,dispute.id,agreement)).id,plan.id);
   const revisedParts=await sql('SELECT * FROM dispute_payment_installments WHERE plan_id=$1 ORDER BY installment_number',[plan.id]);
+  await assert.rejects(()=>payDisputeInstallment(u,parts[1].id,{evidence:'Stale replaced installment confirmation'}),/unavailable|replaced/);
   assert.equal(revisedParts[0].id,parts[0].id);assert.equal(revisedParts[1].amount,'35.00');assert.notEqual(revisedParts[1].id,parts[1].id);
   await payDisputeInstallment(u,revisedParts[1].id,evidence);
   snapshot=await economySnapshot(u.id);assert.equal(snapshot.financialStatements[0].cash,'1035.00');assert.equal(snapshot.financialStatements[0].receivables,'0.00');assert.equal(snapshot.financialStatements[0].balanceCheck,'0.00');
