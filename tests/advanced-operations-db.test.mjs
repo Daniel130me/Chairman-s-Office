@@ -7,7 +7,7 @@ import {reviseDisputePlan,createDisputePlan,payDisputeInstallment,processDispute
 import {createRfq,counterRfq,decideRfq,priceQuote} from '../lib/supplier-rfq.mjs';
 import {reconcileWorlds} from '../scripts/reconcile-worlds.mjs';
 import {economySnapshot} from '../lib/economy.mjs';
-import {recordStocktake,returnCustomerSale,returnSupplierLine,reviewSupplier,createObligation,completeObligation,processContractObligations,openDispute,addDisputeEvidence,resolveDispute,advancedOperationsSnapshot} from '../lib/advanced-operations.mjs';
+import {recordStocktake,returnCustomerSale,returnSupplierLine,reviewSupplier,createObligation,completeObligation,processContractObligations,openDispute,addDisputeEvidence,createDisputeCure,resolveDispute,advancedOperationsSnapshot} from '../lib/advanced-operations.mjs';
 test('stock, returns, contractual enforcement and settlement reconcile in PostgreSQL',{skip:process.env.RUN_ADVANCED_OPERATIONS_DB_TESTS!=='1',timeout:60000},async()=>{
  assert.match(process.env.DATABASE_URL||'',/@127\.0\.0\.1:5432\/chairman_ci\?/);
  const u={id:uid(),name:'Operations fixture'},other={id:uid()},w=uid(),c=uid();
@@ -87,7 +87,16 @@ test('stock, returns, contractual enforcement and settlement reconcile in Postgr
   const agreement={agreement:'Confirmed fictional settlement in two payments',operationKey:uid(),installments:[{amount:'30',dueAt:new Date(Date.now()+86400000).toISOString()},{amount:'40',dueAt:new Date(Date.now()+172800000).toISOString()}]};
   await assert.rejects(()=>createDisputePlan(u,dispute.id,agreement),/evidence/);
   await addDisputeEvidence(u,dispute.id,{source:'Signed settlement',description:'Agreed conditional seventy dollar payment plan.',operationKey:uid()});
-  const plan=await createDisputePlan(u,dispute.id,agreement);assert.equal((await createDisputePlan(u,dispute.id,agreement)).id,plan.id);
+  const cureBody={title:'Correct delivery defect',description:'Signed agreement to correct the identified delivery defect and provide acceptance evidence.',responsibleParty:'company',dueAt:new Date(Date.now()+86400000).toISOString(),confirm:true,operationKey:uid()};
+   await assert.rejects(()=>createDisputeCure(other,dispute.id,cureBody),/unavailable/);
+   const cure=await createDisputeCure(u,dispute.id,cureBody);assert.equal((await createDisputeCure(u,dispute.id,cureBody)).id,cure.id);
+   await assert.rejects(()=>createDisputePlan(u,dispute.id,agreement),/corrective plan/);
+   await assert.rejects(()=>resolveDispute(u,dispute.id,{resolution:'resume',reason:'Resume without evidence'}),/corrective plan/);
+   await sql("UPDATE contract_obligations SET due_at=now()-interval '1 day' WHERE id=$1",[cure.id]);
+   await processContractObligations(u.id);
+   assert.equal((await sql('SELECT status FROM contract_obligations WHERE id=$1',[cure.id]))[0].status,'breached');
+   await completeObligation(u,cure.id,{status:'fulfilled',evidence:'Customer accepted the documented corrected delivery.'});
+   const plan=await createDisputePlan(u,dispute.id,agreement);assert.equal((await createDisputePlan(u,dispute.id,agreement)).id,plan.id);
   const parts=await sql('SELECT * FROM dispute_payment_installments WHERE plan_id=$1 ORDER BY installment_number',[plan.id]);
   const evidence={evidence:'Confirmed receipt in fictional bank record'};
   await assert.rejects(()=>payDisputeInstallment(other,parts[0].id,evidence),/unavailable/);
