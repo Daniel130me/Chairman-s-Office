@@ -94,6 +94,7 @@ export function buildActivityFeed(state = {}, user = {}) {
   };
 
   const eventTargets = {
+    'subsidiary-disposed':'acquisitions',
     'acquisition-payable-paid':'acquisitions',
     'dispute-plan-revised':'operations',
     'dispute-plan-created':'operations','dispute-installment-paid':'operations','dispute-installment-overdue':'operations','dispute-plan-cancelled':'operations',
