@@ -24,3 +24,6 @@ The simulation must not be called complete solely because compilation succeeds. 
 
 ## Rollback
 Stop further promotion if an invariant, authorization boundary, migration or required experience fails. Roll back application code to the last known-compatible deployment; restore data only using an approved recovery plan (a database restore can lose new records). Keep any failed candidate isolated and record the defect. Do not erase fictional history as a repair.
+
+## Read-only operational health
+Run `npm run engine:health` in the intended environment. It reports aggregate stale worlds, repeat stage errors, worker heartbeat and stale meetings without exposing user IDs or messages. Thresholds (30-minute world delay, 20-minute worker heartbeat, 3 consecutive failures) are initial operational defaults and must be tuned against real load. CI also rehearses a PostgreSQL dump/restore against its isolated fixture database and runs invariant checks before and after; this is not a production Neon recovery rehearsal.

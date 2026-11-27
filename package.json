@@ -12,7 +12,8 @@
     "start": "next start",
     "test": "node --test tests/*.test.mjs",
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
-    "db:reconcile": "node --env-file-if-exists=.env.local scripts/reconcile-worlds.mjs"
+    "db:reconcile": "node --env-file-if-exists=.env.local scripts/reconcile-worlds.mjs",
+    "engine:health": "node --env-file-if-exists=.env.local scripts/engine-health.mjs"
   },
   "dependencies": {
     "@neondatabase/auth": "0.7.0-beta",

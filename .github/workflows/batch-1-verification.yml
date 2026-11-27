@@ -52,5 +52,17 @@ jobs:
         run: RUN_ADVANCED_OPERATIONS_DB_TESTS=1 node --test tests/advanced-operations-db.test.mjs
       - name: Executive experience database transactions
         run: RUN_EXECUTIVE_EXPERIENCE_DB_TESTS=1 node --test tests/executive-experience-db.test.mjs
+      - name: Read-only invariant checks
+        run: npm run db:reconcile
+      - name: Verify backup and restore on isolated CI database
+        env:
+          PGPASSWORD: chairman_ci
+        run: |
+          pg_dump --version
+          pg_dump -h 127.0.0.1 -U chairman_ci -Fc chairman_ci -f /tmp/chairman-ci.dump
+          createdb -h 127.0.0.1 -U chairman_ci chairman_restore
+          pg_restore -h 127.0.0.1 -U chairman_ci --exit-on-error -d chairman_restore /tmp/chairman-ci.dump
+          DATABASE_URL=postgresql://chairman_ci:chairman_ci@127.0.0.1:5432/chairman_restore?sslmode=disable npm run db:reconcile
+          rm -f /tmp/chairman-ci.dump
       - name: Verify production build
         run: npm run build

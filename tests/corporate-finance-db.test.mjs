@@ -5,6 +5,7 @@ import {disposeSubsidiary} from '../lib/subsidiary-disposal.mjs';
 import {processLoanObligations} from '../lib/loan-schedule.mjs';
 import {economySnapshot,advanceEconomy,recordSystemAssetPurchase} from '../lib/economy.mjs';
 import {createCompanyLoan,transitionCompanyLoan,repayCompanyLoan,createAcquisition,transitionAcquisition} from '../lib/operations.mjs';
+import {startIntangibleSchedule,cancelIntangibleSchedule,processIntangibleSchedules} from '../lib/intangible-schedules.mjs';
 import {adjustAcquiredIntangible,payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
 import {captureGroupAccountHistory,listGroupAccountHistory} from '../lib/group-account-history.mjs';
 const enabled=process.env.RUN_CORPORATE_FINANCE_DB_TESTS==='1';
@@ -221,6 +222,20 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   const iaGroup=(await corporateFinanceSnapshot(user.id)).group;
   assert.equal(iaGroup.cash,originalGroup.cash);assert.equal(iaGroup.goodwill,originalGroup.goodwill);assert.equal(iaGroup.balanceCheck,'0.00');
   assert.equal((await corporateFinanceSnapshot(other.id)).intangibleAdjustments.length,0);
+
+  const schedule=await startIntangibleSchedule(user,ia.id,{months:3,evidence:'Approved remaining licence life of three months.'});
+  await assert.rejects(()=>startIntangibleSchedule(other,ia.id,{months:3,evidence:'Unauthorized attempt.'}),/unavailable/);
+  await assert.rejects(()=>adjustAcquiredIntangible(user,ia.id,{...adjust,operationKey:uid()}),/active schedule/);
+  await sql("UPDATE acquisition_amortization_schedules SET next_due_day=(date_trunc('month',now() AT TIME ZONE 'UTC')-interval '1 month')::date WHERE id=$1",[schedule.id]);
+  await Promise.all([processIntangibleSchedules(user.id),processIntangibleSchedules(user.id)]);
+  const scheduled=(await corporateFinanceSnapshot(user.id)).amortizationSchedules.find(s=>s.id===schedule.id);
+  assert.equal(scheduled.months_remaining,1);
+  const remainingAsset=(await economySnapshot(user.id)).financialStatements.find(s=>s.companyId===intangibleCompleted.target_company_id);
+  assert.equal(remainingAsset.intangibleAssets,'5.00');
+  await assert.rejects(()=>cancelIntangibleSchedule(other,schedule.id,{reason:'Unauthorized cancellation.'}),/unavailable/);
+  await cancelIntangibleSchedule(user,schedule.id,{reason:'Approved schedule replacement.'});
+  await processIntangibleSchedules(user.id);
+  assert.equal((await economySnapshot(user.id)).financialStatements.find(s=>s.companyId===intangibleCompleted.target_company_id).intangibleAssets,'5.00');
 
   // Simulate 72 hours of absence plus the current UTC day using a second tenant.
   // This exercises the real financial catch-up code without waiting three days.
