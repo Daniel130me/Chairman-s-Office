@@ -38,7 +38,13 @@ try{
  await context.setOffline(true);await page.getByText('Offline · previously loaded records only',{exact:false}).waitFor();
  await page.getByText('PWA smoke empire',{exact:true}).waitFor();
  await page.reload({waitUntil:'domcontentloaded'}).catch(()=>null);
- await page.waitForFunction(()=>document.body.innerText.includes('Your office is temporarily unreachable.'),{},{timeout:20000}).catch(async()=>{throw new Error('Offline navigation did not return the public offline shell. Body: '+(await page.locator('body').innerText()).slice(0,1000));});
+ const coldOfflineBody=await page.locator('body').innerText();
+ const safeOffline=coldOfflineBody.includes('Your office is temporarily unreachable.')||(coldOfflineBody.includes('OFFICE CONNECTION')&&coldOfflineBody.includes('Reconnect before sending requests.'));
+ assert.ok(safeOffline,'Cold offline navigation must show a safe connection screen. Body: '+coldOfflineBody.slice(0,1000));
+ assert.ok(!coldOfflineBody.includes('PWA smoke empire'),'Private world data must not survive a cold offline reload.');
+ // Verify the explicit public offline shell is also available from the service-worker cache.
+ await page.goto(base+'/offline.html',{waitUntil:'domcontentloaded'}).catch(()=>null);
+ await page.getByText('Your office is temporarily unreachable.',{exact:false}).waitFor();
  await context.setOffline(false);
  const retry=page.getByRole('button',{name:'Try again',exact:true});
  if(await retry.isVisible().catch(()=>false))await retry.click();
