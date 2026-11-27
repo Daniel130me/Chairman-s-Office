@@ -3,6 +3,7 @@ import RichText from './RichText.jsx';
 import {previewText} from './rich-text.mjs';
 import {Phone,PhoneOff,MessageCircle,Users,CalendarDays,BriefcaseBusiness,Landmark,FileText,Scale,ShieldCheck,Settings as SettingsIcon,Bell,Wifi,BatteryFull,Signal,ChevronLeft,ChevronRight,Search,Plus,Send,Mic,MicOff,Volume2,VolumeX,Home as HomeIcon,Clock3,Sun,Moon,CloudSun,ArrowUpRight,ArrowDownLeft,Check,CheckCheck,MoreVertical,Menu,LockKeyhole,Unlock,Power,Grid3X3,Headphones,UserRound,Building2,TrendingUp,AlertTriangle,Newspaper,Video,Paperclip,Trash2,RefreshCw,Mail as MailIcon,ClipboardList,Globe2,ChartNoAxesCombined,Camera,Pause,Play,Download,Keyboard,Star,HandCoins,UserPlus,X,Copy,PhoneCall,Boxes,Plane,HeartHandshake} from 'lucide-react';
 import Vapi from '@vapi-ai/web';
+import {describeVapiFailure,formatVapiStage} from '../../lib/vapi-client-errors.mjs';
 import { authClient } from '../../lib/auth/client.js';
 import{api,usd,shortDate,shortTime,toUint8}from './api.js';import{playRing,stopRing,clickTone,unlockAudio}from './sound.js';
 import {usePwa} from './usePwa.js';
@@ -33,14 +34,14 @@ const [user,setUser]=useState(null),[world,setWorld]=useState(null),[loading,set
 const pwa=usePwa(),[bootError,setBootError]=useState(''),[syncError,setSyncError]=useState(''),[lastSync,setLastSync]=useState(null),[updateDismissed,setUpdateDismissed]=useState(false);
 const sessionEpoch=useRef(0),requestSeq=useRef(0),appliedSeq=useRef(0),pollBusy=useRef(false),sessionChannel=useRef(null),loggingOut=useRef(false),sessionUser=useRef(null),notificationSync=useRef(false);
 const checkpointRef=useRef({id:null,saved:0,task:null});
-const vapiRef=useRef(null),transcriptRef=useRef([]),callRef=useRef(null),dialingRef=useRef(false),finishingRef=useRef(false),lastInvite=useRef(null),targetInvite=useRef(null),knownInviteIds=useRef(new Set()),toastTimer=useRef(null);const notify=s=>{setToast(s);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(''),4500)};
+const vapiRef=useRef(null),transcriptRef=useRef([]),callRef=useRef(null),dialingRef=useRef(false),finishingRef=useRef(false),lastInvite=useRef(null),targetInvite=useRef(null),knownInviteIds=useRef(new Set()),toastTimer=useRef(null),callStartTimer=useRef(null),callOutcomeRef=useRef(null),callFailureReasonRef=useRef(''),callConnectedRef=useRef(false);const notify=s=>{setToast(s);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(''),4500)};
 const reload=async()=>{
  const epoch=sessionEpoch.current,seq=++requestSeq.current;
  try{const r=await api('/state');if(epoch!==sessionEpoch.current||loggingOut.current)return r.state;
   if(seq>=appliedSeq.current){if(sessionUser.current&&sessionUser.current!==r.user.id)clearSession();sessionUser.current=r.user.id;appliedSeq.current=seq;setUser(r.user);setWorld(r.state);setLastSync(Date.now());setSyncError('');}return r.state;
  }catch(e){if(epoch===sessionEpoch.current&&seq>=appliedSeq.current){setSyncError(e.message);if((e.status===401||e.status===403)&&sessionUser.current){clearSession();}}throw e;}
 };
-function clearSession(){sessionEpoch.current++;sessionUser.current=null;stopRing();callRef.current=null;try{vapiRef.current?.stop();}catch{}vapiRef.current=null;setCall(null);setIncoming(null);setRinging(false);transcriptRef.current=[];setTranscript([]);lastInvite.current=null;targetInvite.current=null;setTargetEventId(null);setUser(null);setWorld(null);setLastSync(null);setSyncError('');home();}
+function clearSession(){sessionEpoch.current++;sessionUser.current=null;stopRing();clearTimeout(callStartTimer.current);callStartTimer.current=null;callConnectedRef.current=false;callOutcomeRef.current=null;callFailureReasonRef.current='';callRef.current=null;try{vapiRef.current?.stop();}catch{}vapiRef.current=null;setCall(null);setIncoming(null);setRinging(false);transcriptRef.current=[];setTranscript([]);lastInvite.current=null;targetInvite.current=null;setTargetEventId(null);setUser(null);setWorld(null);setLastSync(null);setSyncError('');home();}
 async function boot(){setLoading(true);setBootError('');try{await reload();}catch(e){if(e.status!==401&&e.status!==403)setBootError(e.message);}finally{setLoading(false);}}
 useEffect(()=>{if(!pwa.update)setUpdateDismissed(false);},[pwa.update]);
 function updateApp(){if(callRef.current||dialingRef.current||incoming||page==='meeting'){notify('Finish your call or leave the boardroom before updating.');return;}if(window.confirm('Save any unfinished work first. Updating reloads your executive phone. Continue?'))pwa.applyUpdate();}
@@ -82,7 +83,7 @@ async function connect(c,inviteId){
   try{
     const data=await api('/calls/start',{method:'POST',body:{contactId:c.id,inviteId}});
     if(data.unavailable){notify(c.name+' is unavailable. You can leave a message.');go('conversation',{...c,missedCallId:data.call.id});await reload();return;}
-    callRef.current=data.call.id;checkpointRef.current={id:data.call.id,saved:0,task:null};transcriptRef.current=[];setTranscript([]);
+    callRef.current=data.call.id;checkpointRef.current={id:data.call.id,saved:0,task:null};callOutcomeRef.current=null;callFailureReasonRef.current='';callConnectedRef.current=false;clearTimeout(callStartTimer.current);callStartTimer.current=null;transcriptRef.current=[];setTranscript([]);
     setCall({...data,contact:c,live:false});setIncoming(null);
     await startVapi(data,c);
   }catch(e){notify(e.message);setIncoming(null);reload().catch(()=>{});}
@@ -90,52 +91,84 @@ async function connect(c,inviteId){
 }
 async function answer(){await connect(world.contacts.find(x=>x.id===incoming?.contact_id),incoming?.id);}
 async function dial(c){await connect(c,null);}
+function failVapiConnection(event){
+  if(!callRef.current||callOutcomeRef.current==='failed')return;
+  const failure=describeVapiFailure(event);
+  callOutcomeRef.current='failed';
+  callFailureReasonRef.current=failure.summary;
+  clearTimeout(callStartTimer.current);callStartTimer.current=null;
+  console.error('[Vapi] call connection failed',{type:failure.type,stage:failure.stage,detail:failure.detail});
+  notify(failure.userMessage);
+  void finishVoice(true,'failed',failure.summary);
+}
 async function startVapi(data,c){
   const key=process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY;
   const assistant=data.assistantId||process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID;
-  if(!key||!assistant){notify('Voice credentials not set. Configure Vapi to make live calls.');await finishVoice(false,'failed');return;}
+  if(!key||!assistant){
+    failVapiConnection({type:'configuration-error',stage:'configuration',error:'The production Vapi public key or assistant ID is missing.'});
+    return;
+  }
   try{
     const v=new Vapi(key);vapiRef.current=v;
-    v.on('call-start',()=>setCall(t=>t?{...t,live:true}:t));
+    const markConnected=()=>{
+      callConnectedRef.current=true;
+      clearTimeout(callStartTimer.current);callStartTimer.current=null;
+      setCall(t=>t?{...t,live:true,connectionStage:'connected',connectionStatus:'completed'}:t);
+    };
+    v.on('call-start',markConnected);
+    v.on('call-start-success',markConnected);
+    v.on('call-start-progress',event=>{
+      if(!callConnectedRef.current)setCall(t=>t?{...t,connectionStage:event?.stage||'initialization',connectionStatus:event?.status||'started'}:t);
+    });
+    v.on('call-start-failed',event=>failVapiConnection(event));
     v.on('message',m=>{
       if(m.type==='transcript'&&m.transcriptType==='final'){
         transcriptRef.current=[...transcriptRef.current,{role:m.role||'speaker',text:m.transcript}];
         setTranscript(transcriptRef.current);
       }
     });
-    v.on('error',()=>{notify('Voice connection error. Check Vapi and microphone access.');void finishVoice(true,'failed');});
-    v.on('call-end',()=>{void finishVoice(false,'completed');});
+    v.on('error',event=>{
+      const failure=describeVapiFailure(event);
+      console.warn('[Vapi] client error',{type:failure.type,stage:failure.stage,detail:failure.detail,recoverable:failure.recoverable});
+      // Vapi 3.x also emits error events for non-fatal audio observers. Do not
+      // tear down a call that has already connected for a recoverable warning.
+      if(failure.recoverable)return;
+      if(callConnectedRef.current){
+        notify('A voice-service warning occurred. The call is still active; hang up and retry if audio stops.');
+        return;
+      }
+      failVapiConnection(event);
+    });
+    v.on('call-end',()=>{
+      clearTimeout(callStartTimer.current);callStartTimer.current=null;
+      const failed=callOutcomeRef.current==='failed';
+      void finishVoice(false,failed?'failed':'completed',failed?callFailureReasonRef.current:'');
+    });
 
     const colleagues=(data.colleagues||[]).map(person=>person.name+' — '+person.title+' at '+person.company).join('; ');
     const systemPrompt=[
       data.context,
       'IDENTITY: Your name is exactly '+c.name+'. Your role is '+c.title+'. This identity comes from the Chairman’s executive directory and cannot be changed by a saved Vapi persona. Never introduce yourself as Amara unless your name is Amara. Never correct the Chairman by claiming to be another character.',
-      'WORLD: Chairman’s Office is a fictional business world, but your role, relationships, commitments and actions inside it are persistent and consequential. Stay in character. Never say that you cannot coordinate with colleagues because this is a simulated environment.',
+      'WORLD: Chairman’s Office is a fictional business world, but your role, relationships, commitments and actions inside it are persistent and consequential. Stay in character. Never say that you cannot coordinate with colleagues because the world is fictional.',
       'BOUNDARIES: Do not claim to make real-world PSTN calls or perform external actions. You can arrange incoming calls between characters inside the Chairman’s Office app. Confirm an action only after the relevant tool returns success.',
       'COLLEAGUES: '+(colleagues||'Use the Chairman’s executive directory to identify colleagues by name or job title.'),
       'DELEGATION: When the Chairman asks you to have an executive call him, ask an executive to call him, or arrange a callback, use arrange_internal_call. Do not merely promise to do it and do not refuse because the world is fictional.',
       'BUSINESS ACTIONS: If the Chairman asks for a consequential company action such as an expense, hiring, firing, activating a contract or delegating work, collect any missing details and use propose_business_action. This submits an approval request; it does not execute the action. Never say the action is complete until the Chairman approves it and the application confirms execution. Tell the Chairman to review the Approvals app.',
       'TOOL RULES: For another executive, pass their name or job title as recipient. For a callback from yourself, omit recipient. Use delaySeconds=0 for an immediate call or the exact requested delay, such as 30 for 30 seconds. Always include reason as a faithful copy of the Chairman’s request, preserving timing words. Never invent a delay. If the timing is vague, ask one short clarifying question. If the tool reports an error, explain the error honestly.',
-      'CALL FLOW: An arranged call appears as an incoming call on the Chairman’s Office phone. If the Chairman is still on a call when the new call becomes due, it waits until the current call ends. Never claim a call is already connected before the Chairman answers.',
-      'If the Chairman asks you to call someone else rather than have them call him, clarify which direction he wants. Do not use the incoming-call tool for an outgoing call.'
+      'CALL FLOW: An arranged call appears as an incoming call on the Chairman’s Office phone. If the Chairman is still on a call when the new call becomes due, it waits until that call ends. Never claim a call is already connected before the Chairman answers.',
+      'If the Chairman asks you to call someone else rather than have them call you, clarify which direction he wants. Do not use the incoming-call tool for an outgoing call.'
     ].filter(Boolean).join('\n\n');
 
     const callTool={
-      type:'function',
-      async:false,
+      type:'function',async:false,
       function:{
         name:'arrange_internal_call',
         description:'Arrange an incoming in-app call from an executive to the Chairman, either immediately or after a requested delay. Use this when the Chairman asks a colleague to call him or asks you to call him back. This does not place a real-world phone call.',
-        parameters:{
-          type:'object',
-          properties:{
-            recipient:{type:'string',description:'The executive’s name or job title. Omit this for a callback from the current speaker.'},
-            delaySeconds:{type:'integer',minimum:0,maximum:86400,description:'0 for an immediate call; otherwise the exact delay in seconds, for example 30 for 30 seconds.'},
-            reason:{type:'string',maxLength:240,description:'A concise copy of the Chairman’s exact request. Preserve timing words such as now, later, or in 30 seconds.'}
-          },
-          required:['reason'],
-          additionalProperties:false
-        }
+        parameters:{type:'object',properties:{
+          recipient:{type:'string',description:'The executive’s name or job title. Omit this for a callback from the current speaker.'},
+          delaySeconds:{type:'integer',minimum:0,maximum:86400,description:'0 for an immediate call; otherwise the exact delay in seconds, for example 30 for 30 seconds.'},
+          reason:{type:'string',maxLength:240,description:'A concise copy of the Chairman’s exact request. Preserve timing words such as now, later, or in 30 seconds.'}
+        },required:['reason'],additionalProperties:false}
       },
       server:{url:window.location.origin+'/api/vapi/tools'},
       parameters:[{key:'action_token',value:'{{ actionToken }}'}],
@@ -144,49 +177,43 @@ async function startVapi(data,c){
     const overrides={
       firstMessage:'Good day, Chairman. '+c.name+' speaking.',
       variableValues:{
-        character_name:c.name,
-        character_title:c.title,
-        character_company:c.company,
-        chairman_name:user?.name||'Chairman',
-        executive_context:data.context,
-        available_colleagues:colleagues,
-        actionToken:data.actionToken||''
+        character_name:c.name,character_title:c.title,character_company:c.company,
+        chairman_name:user?.name||'Chairman',executive_context:data.context,
+        available_colleagues:colleagues,actionToken:data.actionToken||''
       },
       ...(data.actionToken?{'tools:append':[callTool,{
         type:'function',async:false,function:{
           name:'propose_business_action',
           description:'Submit a consequential action in the Chairman’s fictional business empire for Chairman approval. Never execute it yourself. Supported action types are expense, hire, fire, activate-contract and assign-task.',
-          parameters:{
-            type:'object',
-            properties:{
-              action_type:{type:'string',enum:['expense','hire','fire','activate-contract','assign-task']},
-              title:{type:'string'},
-              reason:{type:'string'},
-              payload:{type:'object',properties:{
-                companyId:{type:'string'},amount:{type:'string'},description:{type:'string'},
-                name:{type:'string'},title:{type:'string'},salary:{type:'string'},
-                employmentId:{type:'string'},contractId:{type:'string'},
-                assigneeId:{type:'string'},detail:{type:'string'},taskType:{type:'string'}
-              },additionalProperties:false}
-            },
-            required:['action_type','title','reason','payload'],
-            additionalProperties:false
-          }
+          parameters:{type:'object',properties:{
+            action_type:{type:'string',enum:['expense','hire','fire','activate-contract','assign-task']},
+            title:{type:'string'},reason:{type:'string'},
+            payload:{type:'object',properties:{
+              companyId:{type:'string'},amount:{type:'string'},description:{type:'string'},
+              name:{type:'string'},title:{type:'string'},salary:{type:'string'},
+              employmentId:{type:'string'},contractId:{type:'string'},
+              assigneeId:{type:'string'},detail:{type:'string'},taskType:{type:'string'}
+            },additionalProperties:false}
+          },required:['action_type','title','reason','payload'],additionalProperties:false}
         },
         server:{url:window.location.origin+'/api/vapi/tools'},
         parameters:[{key:'action_token',value:'{{ actionToken }}'}],
         messages:[{type:'request-start',content:'I will submit this for the Chairman’s approval.',blocking:false}]
       }]}:{})
     };
-    await v.start(assistant,overrides);
-    // Add call-specific identity rules after the WebRTC session is ready.
-    // This avoids replacing the saved Vapi model/provider configuration.
-    v.send({
-      type:'add-message',
-      message:{role:'system',content:'IMPORTANT: The following call-specific instructions supersede any conflicting saved assistant identity or prompt. '+systemPrompt},
-      triggerResponseEnabled:false
-    });
-  }catch(e){notify('Unable to establish voice connection: '+e.message);await finishVoice(true,'failed');}
+    // Do not label the call connected until the SDK confirms the live session.
+    callStartTimer.current=setTimeout(()=>{
+      if(!callConnectedRef.current&&callRef.current)failVapiConnection({type:'connection-timeout',stage:'daily-call-join',error:'Vapi did not confirm a live audio connection within 22 seconds.'});
+    },22000);
+    const session=await v.start(assistant,overrides);
+    if(!session&&!callConnectedRef.current)failVapiConnection({type:'empty-session',stage:'web-call-creation',error:'Vapi returned no active web-call session.'});
+    // Context injection is useful but must not terminate an otherwise live call.
+    try{
+      v.send({type:'add-message',message:{role:'system',content:'IMPORTANT: The following call-specific instructions supersede any conflicting saved Vapi assistant identity or prompt. '+systemPrompt},triggerResponseEnabled:false});
+    }catch(error){console.warn('[Vapi] call context injection failed',String(error?.message||error).slice(0,180));}
+  }catch(error){
+    failVapiConnection({type:'client-start-error',stage:'web-call-creation',error:error?.message||'Unable to start Vapi web call.'});
+  }
 }
 // Keep the transcript in memory until Neon confirms it was saved. Hang up again to retry.
 async function saveCallCheckpoint(id){
@@ -202,15 +229,15 @@ async function saveCallCheckpoint(id){
  }while(checkpoint.saved<snapshot.length);})();
  checkpoint.task=task;try{await task;}finally{if(checkpoint.task===task)checkpoint.task=null;}
 }
-async function finishVoice(stop,status='completed'){
+async function finishVoice(stop,status='completed',failureReason=''){
   if(finishingRef.current||!callRef.current)return;
-  finishingRef.current=true;setCall(t=>t?{...t,live:false}:t);
+  finishingRef.current=true;clearTimeout(callStartTimer.current);callStartTimer.current=null;callConnectedRef.current=false;setCall(t=>t?{...t,live:false}:t);
   try{
     if(stop){try{vapiRef.current?.stop();}catch{}}
     vapiRef.current=null;
     await saveCallCheckpoint(callRef.current);
-    await api('/calls/'+callRef.current+'/end',{method:'POST',body:{transcript:[],status}});
-    callRef.current=null;setCall(null);transcriptRef.current=[];setTranscript([]);reload().catch(()=>{});
+    await api('/calls/'+callRef.current+'/end',{method:'POST',body:{transcript:[],status,failureReason}});
+    callRef.current=null;callOutcomeRef.current=null;callFailureReasonRef.current='';setCall(null);transcriptRef.current=[];setTranscript([]);reload().catch(()=>{});
   }catch(e){notify('Call ended. Tap hang up again to retry saving the transcript.');}
   finally{finishingRef.current=false;}
 }
@@ -278,7 +305,7 @@ return <div className={'phone-environment '+(world.settings?.theme==='light'?'li
 {shade&&<div className="shade" onClick={()=>setShade(false)}><div className="shade-top"><span>{dayLabel(clock)}</span><button onClick={e=>{e.stopPropagation();setShade(false);go('settings')}}><SettingsIcon size={21}/></button></div><div className="quick-grid"><div><Wifi/> {pwa.online?'Connected':'Offline'}</div><div><Volume2/> Sound</div><div><Moon/> Focus</div><div><Bell/> Alerts</div></div><div className="shade-activity-link"><button onClick={e=>{e.stopPropagation();setShade(false);go('activity')}}><ClipboardList size={18}/> View full Activity timeline <ChevronRight size={17}/></button></div><h3>Notifications</h3>{pending.length?pending.map(i=><div className="notification-item" key={i.id}><PhoneCall size={19}/><div><strong>{i.subject}</strong><p>{i.preview}</p></div></div>):<p className="shade-empty">You're all caught up.</p>}</div>}
 {drawer&&<div className="app-drawer"><div className="drawer-handle" onClick={()=>setDrawer(false)}/><h2>Apps</h2><div className="drawer-grid">{apps.map(a=><IconTile key={a[0]} id={a[0]} color={a[2]} label={a[0]==='assistant'?chiefName:undefined} onClick={()=>go(a[0])}/>)}</div></div>}
 {incoming&&!call&&pwa.online&&!syncError&&<div className="call-overlay incoming"><div className="call-top"><small>INCOMING EXECUTIVE CALL</small><span className="call-network">Chairman's Office · Secure line</span></div><div className="caller-ident"><div className="caller-rings"><Avatar name={currentContact(incoming.contact_id)?.name||'Executive'} size={112}/></div><h2>{currentContact(incoming.contact_id)?.name}</h2><p>{currentContact(incoming.contact_id)?.title}</p><small>{currentContact(incoming.contact_id)?.company}</small><div className="call-reason">{incoming.preview}</div></div><div className="call-actions"><button className="call-decline" onClick={decline}><PhoneOff/><span>Decline</span></button><button className="call-accept" onClick={answer}><Phone/><span>Answer</span></button></div></div>}
-{call&&<div className="call-overlay active-call"><div className="call-top"><small>{call.live?'CONNECTED':'EXECUTIVE LINE'}</small><span>{call.live?'Live voice conversation':'Connect using Vapi voice credentials'}</span></div><div className="caller-ident"><Avatar name={call.contact.name} size={108}/><h2>{call.contact.name}</h2><p>{call.contact.title}</p><small>{call.contact.company}</small></div><div className="call-transcripts">{transcript.slice(-3).map((x,i)=><p key={i}><b>{x.role}:</b> {x.text}</p>)}</div><div className="incall-controls"><button onClick={()=>{vapiRef.current?.setMuted(!muted);setMuted(!muted)}}>{muted?<MicOff/>:<Mic/>}<span>Mute</span></button><button onClick={()=>{setSpeaker(!speaker);notify('Audio output is controlled by your device.')}}>{speaker?<Volume2/>:<VolumeX/>}<span>Speaker</span></button><button onClick={()=>notify('Call transcript is saved securely when the call ends.')}><ClipboardList/><span>Notes</span></button></div><button className="hangup" onClick={hangup}><PhoneOff size={27}/></button></div>}
+{call&&<div className="call-overlay active-call"><div className="call-top"><small>{call.live?'CONNECTED':'EXECUTIVE LINE'}</small><span aria-live="polite">{call.live?'Live voice conversation':call.connectionStage?formatVapiStage(call.connectionStage):'Requesting microphone and starting live audio'}</span></div><div className="caller-ident"><Avatar name={call.contact.name} size={108}/><h2>{call.contact.name}</h2><p>{call.contact.title}</p><small>{call.contact.company}</small></div><div className="call-transcripts">{transcript.slice(-3).map((x,i)=><p key={i}><b>{x.role}:</b> {x.text}</p>)}</div><div className="incall-controls"><button onClick={()=>{vapiRef.current?.setMuted(!muted);setMuted(!muted)}}>{muted?<MicOff/>:<Mic/>}<span>Mute</span></button><button onClick={()=>{setSpeaker(!speaker);notify('Audio output is controlled by your device.')}}>{speaker?<Volume2/>:<VolumeX/>}<span>Speaker</span></button><button onClick={()=>notify('Call transcript is saved securely when the call ends.')}><ClipboardList/><span>Notes</span></button></div><button className="hangup" onClick={hangup}><PhoneOff size={27}/></button></div>}
 {pwa.update&&!updateDismissed&&!call&&!incoming&&page==='home'&&<div className="pwa-update-notice" role="status">Office update available<button onClick={updateApp}>Update</button><button onClick={()=>setUpdateDismissed(true)} aria-label="Dismiss update notice">Later</button></div>}{toast&&<div className="toast">{toast}</div>}
 </div></div>;
 }

@@ -7,6 +7,7 @@ import {handleCallIntent} from '../../lib/executive-call-intent.mjs';
 import {normalizeMailSubject,replyMailSubject} from '../../lib/mail-rules.mjs';
 
 import {createVapiActionToken} from '../../lib/vapi-action-token.mjs';
+import {failedCallSummary} from '../../lib/call-summary-rules.mjs';
 import {economySnapshot} from '../../lib/economy.mjs';
 import {boardSnapshot} from '../../lib/board-governance.mjs';
 import {relationshipSnapshot} from '../../lib/relationship-world.mjs';
@@ -194,10 +195,11 @@ export async function startCall(user,contactId,inviteId=null){
     colleagues
   };
 }
-export async function finishCall(user,id,transcript,status='completed'){
+export async function finishCall(user,id,transcript,status='completed',failureReason=''){
  const call=await one('SELECT * FROM calls WHERE id=$1 AND user_id=$2',[id,user.id]);if(!call)throw Error('Call unavailable');if(call.status!=='active')return {summary:call.summary};
  const rows=mergeTranscript(call.transcript,transcript);
- const summary=await ask('Summarize this fictional executive conversation precisely: decisions, commitments, risks, follow-ups. Do not invent facts.',JSON.stringify(rows),{fallback:rows.map(r=>r.role+': '+r.text).join(' ').slice(0,1500)||'Call completed; no transcript available.'});
+ const noConversationFailure=status==='failed'&&!rows.length?failedCallSummary(failureReason):null;
+ const summary=noConversationFailure||await ask('Summarize this fictional executive conversation precisely: decisions, commitments, risks, follow-ups. Do not invent facts.',JSON.stringify(rows),{fallback:rows.map(r=>r.role+': '+r.text).join(' ').slice(0,1500)||'Call completed; no transcript available.'});
  const updated=await transaction(async q=>{const [latest]=await q('SELECT * FROM calls WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,user.id]);if(!latest||latest.status!=='active')return null;const merged=mergeTranscript(latest.transcript,rows);const finalSummary=merged.length===rows.length?summary:merged.map(r=>r.role+': '+r.text).join(' ').slice(0,3000);return (await q("UPDATE calls SET ended_at=now(),status=$4,transcript=$1,summary=$2 WHERE id=$3 AND user_id=$5 AND status='active' RETURNING summary",[JSON.stringify(merged),finalSummary,id,status==='failed'?'failed':'completed',user.id]))[0];});
  const finalSummary=updated?.summary??(await one('SELECT summary FROM calls WHERE id=$1 AND user_id=$2',[id,user.id]))?.summary;
  if(updated&&rows.length)await queueCharacterMemory({userId:user.id,worldId:call.world_id,contactId:call.contact_id,sourceType:'voice-call',sourceId:id,context:{transcript:rows.slice(-40).map(r=>({role:r.role,text:r.text.slice(0,1200)})),summary:finalSummary,status}}).catch(error=>console.warn('Call memory queue unavailable',error.code||error.name));
