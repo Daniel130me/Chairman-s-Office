@@ -121,7 +121,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   await transitionAcquisition(user,nestedDeal.id,{status:'approved',reason:'Board approved nested holding acquisition'});
   const nestedParent=await transitionAcquisition(user,nestedDeal.id,{status:'completed',reason:'Seller settlement confirmed'});
   const childDeal=await createAcquisition(user,{buyerCompanyId:nestedParent.target_company_id,targetName:'Nested operating company',targetSector:'Services',sellerName:'Operating Seller',description:'Acquire operating subsidiary',purchasePrice:'30',targetValuation:'40',ownershipPercentage:'80',operationKey:uid()});
-  await saveAcquisitionAllocation(user,childDeal.id,{cash:'10',fixedAssets:'5',intangibles:'5',payables:'0',zeroOpeningLiabilities:true,evidence:'Operating company opening assets independently reviewed.',intangibleEvidence:'Software and customer relationships independently valued.'});
+  await saveAcquisitionAllocation(user,childDeal.id,{cash:'10',fixedAssets:'5',intangibles:'5',payables:'3',payableCreditor:'Trade Creditor C',allOpeningLiabilitiesRecorded:true,evidence:'Operating company opening assets and creditor schedule independently reviewed.',intangibleEvidence:'Software and customer relationships independently valued.'});
   for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,childDeal.id,{area,status:'cleared',evidence:'Operating subsidiary diligence verified for '+area});
   await transitionAcquisition(user,childDeal.id,{status:'approved',reason:'Board approved operating subsidiary acquisition'});
   const nestedChild=await transitionAcquisition(user,childDeal.id,{status:'completed',reason:'Operating subsidiary settlement confirmed'});
@@ -141,14 +141,17 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   const nestedHolding=snap.holdings.find(x=>x.acquisition_id===nestedDeal.id),childHolding=snap.holdings.find(x=>x.acquisition_id===childDeal.id);
   assert.ok(nestedHolding&&childHolding);assert.equal(snap.group.balanceCheck,'0.00');
   await assert.rejects(()=>disposeSubsidiary(user,nestedHolding.id,{...exit,stakeSold:'100',proceeds:'115',retainedValue:'0',operationKey:uid()}),/buyer assumes the outstanding loans/);
-  const nestedExit=await disposeSubsidiary(user,nestedHolding.id,{...exit,stakeSold:'100',proceeds:'115',retainedValue:'0',debtAssumptionEvidence:'Signed sale agreement and lender consents confirm buyer assumes Nested Bank A and Nested Bank B facilities.',operationKey:uid()});
+  const nestedExit=await disposeSubsidiary(user,nestedHolding.id,{...exit,stakeSold:'100',proceeds:'115',retainedValue:'0',debtAssumptionEvidence:'Signed sale agreement and lender consents confirm buyer assumes Nested Bank A and Nested Bank B facilities plus Trade Creditor C payable.',operationKey:uid()});
   assert.equal(nestedExit.retained_stake,'0.00');assert.equal(nestedExit.disposed_company_ids.length,2);assert.match(nestedExit.debt_assumption_evidence,/Nested Bank A.*Nested Bank B/);
   assert.equal(nestedExit.closing_statement.companyCount,2);assert.equal(nestedExit.closing_statement.companies.length,2);
   assert.equal(nestedExit.closing_statement.subsidiaryCount,1);assert.equal(nestedExit.closing_statement.intercompanyEliminated,'5.00');
   assert.equal(nestedExit.closing_statement.transferredLoans.length,2);
   assert.equal(nestedExit.closing_statement.transferredLoans.reduce((n,l)=>n+Number(l.outstanding_principal),0),30);
   assert.ok(Number(nestedExit.closing_statement.transferredLoans.find(l=>l.lender_name==='Nested Bank A').accrued_interest_due)>0);
-  assert.ok(Number(nestedExit.closing_statement.totalAssumedDebt)>30);
+  assert.equal(nestedExit.closing_statement.transferredPayables.length,1);
+  assert.equal(nestedExit.closing_statement.transferredPayables[0].creditor,'Trade Creditor C');
+  assert.equal(nestedExit.closing_statement.transferredPayables[0].outstanding,'3.00');
+  assert.ok(Number(nestedExit.closing_statement.totalAssumedDebt)>33);
   assert.equal(nestedExit.closing_statement.intercompanyFacilities.length,1);
   const [transferredFacility]=await sql('SELECT transferred_at,transferred_to FROM intercompany_facilities WHERE id=$1',[internalFacility.id]);
   assert.ok(transferredFacility.transferred_at);assert.equal(transferredFacility.transferred_to,exit.buyer);
