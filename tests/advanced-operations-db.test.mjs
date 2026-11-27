@@ -1,0 +1,55 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {sql,uid,database} from '../backend/src/db.mjs';
+import {createPurchaseOrder,transitionPurchaseOrder,createContract,transitionContract,createInvoice,payInvoice} from '../lib/operations.mjs';
+import {sellInventory} from '../lib/procurement.mjs';
+import {economySnapshot} from '../lib/economy.mjs';
+import {recordStocktake,returnCustomerSale,returnSupplierLine,reviewSupplier,createObligation,completeObligation,processContractObligations,openDispute,addDisputeEvidence,resolveDispute,advancedOperationsSnapshot} from '../lib/advanced-operations.mjs';
+test('stock, returns, contractual enforcement and settlement reconcile in PostgreSQL',{skip:process.env.RUN_ADVANCED_OPERATIONS_DB_TESTS!=='1',timeout:60000},async()=>{
+ assert.match(process.env.DATABASE_URL||'',/@127\.0\.0\.1:5432\/chairman_ci\?/);
+ const u={id:uid(),name:'Operations fixture'},other={id:uid()},w=uid(),c=uid();
+ try{
+  await sql('INSERT INTO users(id,name,email,pass_hash) VALUES($1,$2,$3,$4),($5,$6,$7,$4)',[u.id,u.name,u.id+'@ci.invalid','fixture',other.id,'Other',other.id+'@ci.invalid']);
+  await sql("INSERT INTO worlds(id,user_id,name,region,timezone,sectors,chief) VALUES($1,$2,'CI Group','Fictional','UTC','[]','Chief')",[w,u.id]);
+  await sql("INSERT INTO companies(id,user_id,world_id,name,sector,valuation,cash,revenue) VALUES($1,$2,$3,'A','Retail',10000,1000,0)",[c,u.id,w]);
+  const p=await createPurchaseOrder(u,{companyId:c,vendor:'Supplier',description:'Stock purchase',lines:[{sku:'S1',name:'Stock',quantity:'10',unitCost:'10'}],operationKey:uid()});
+  await transitionPurchaseOrder(u,p.id,{status:'approved',reason:'Authorized'});
+  await transitionPurchaseOrder(u,p.id,{status:'received',reason:'Goods received'});
+  await transitionPurchaseOrder(u,p.id,{status:'paid',reason:'Payment confirmed'});
+  const [line]=await sql('SELECT * FROM purchase_order_lines WHERE purchase_order_id=$1',[p.id]);
+  await reviewSupplier(u,p.id,{quality:'mixed',evidence:'Recorded inspection identified defects.'});
+  const sale=await sellInventory(u,line.inventory_item_id,{quantity:'4',amount:'80',customer:'Customer',operationKey:uid()});
+  const ret={quantity:'1',reason:'Confirmed customer return',operationKey:uid()};
+  const x=await returnCustomerSale(u,sale.id,ret);
+  assert.equal((await returnCustomerSale(u,sale.id,ret)).id,x.id);
+  await assert.rejects(()=>returnCustomerSale(u,sale.id,{quantity:'4',reason:'Excess return',operationKey:uid()}),/exceeds/);
+  await assert.rejects(()=>returnCustomerSale(other,sale.id,ret),/unavailable/);
+  await returnSupplierLine(u,line.id,{quantity:'2',reason:'Supplier cash refund confirmed',operationKey:uid()});
+  await recordStocktake(u,line.inventory_item_id,{expectedQuantity:'5',actualQuantity:'4',reason:'Physical count shortage',operationKey:uid()});
+  let snapshot=await economySnapshot(u.id);assert.equal(snapshot.financialStatements[0].cash,'980.00');assert.equal(snapshot.financialStatements[0].inventory,'40.00');assert.equal(snapshot.financialStatements[0].balanceCheck,'0.00');
+  const ct=await createContract(u,{companyId:c,title:'Service',counterparty:'Customer',terms:'Recorded service terms',value:'100',operationKey:uid()});
+  await transitionContract(u,ct.id,{status:'active',reason:'Authorized'});
+  const o=await createObligation(u,ct.id,{title:'Deliver service',description:'Recorded delivery requirement',responsibleParty:'company',dueAt:'2020-01-01T00:00:00Z',operationKey:uid()});
+  await processContractObligations(u.id);
+  await assert.rejects(()=>transitionContract(u,ct.id,{status:'completed',reason:'Premature'}),/obligations/);
+  await completeObligation(u,o.id,{status:'fulfilled',evidence:'Signed record of completed service'});
+  const invoice=await createInvoice(u,{companyId:c,customer:'Customer',description:'Service delivery',amount:'100',operationKey:uid()});
+  const d=await openDispute(u,ct.id,{invoiceId:invoice.id,reason:'Customer contests delivered scope',operationKey:uid()});
+  await assert.rejects(()=>payInvoice(u,invoice.id),/dispute/);
+  await assert.rejects(()=>resolveDispute(u,d.id,{resolution:'settle',paid:'70',reason:'Agreed settlement'}),/evidence/);
+  await addDisputeEvidence(u,d.id,{source:'Signed agreement',description:'Customer and company agreed seventy dollars.',operationKey:uid()});
+  const settled=await resolveDispute(u,d.id,{resolution:'settle',paid:'70',reason:'Agreed settlement'});
+  assert.equal(settled.credited_amount,'30.00');
+  assert.equal((await resolveDispute(u,d.id,{resolution:'settle',paid:'70',reason:'Agreed settlement'})).id,settled.id);
+  snapshot=await economySnapshot(u.id);
+  assert.equal(snapshot.financialStatements[0].cash,'1050.00');
+  assert.equal(snapshot.financialStatements[0].receivables,'0.00');
+  assert.equal(snapshot.financialStatements[0].balanceCheck,'0.00');
+  assert.equal((await advancedOperationsSnapshot(u.id)).disputes[0].status,'resolved');
+ }finally{
+  await sql('DELETE FROM commercial_disputes WHERE user_id=$1',[u.id]);
+  await sql('DELETE FROM inventory_returns WHERE user_id=$1',[u.id]);
+  await sql('DELETE FROM users WHERE id=ANY($1::uuid[])',[[u.id,other.id]]);
+  await database().end();
+ }
+});
