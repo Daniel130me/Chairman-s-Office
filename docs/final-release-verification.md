@@ -32,3 +32,5 @@ The isolated restore rehearsal uses PostgreSQL 16 client tools matching the serv
 
 ## Mandatory completion gates
 A successful preview build alone is insufficient. The final candidate must pass all CI steps (including backup restoration), all required live acceptance checks, production database isolation and an approved promotion. Record actual results rather than assuming a pass. Unfinished full-duplex audio, period-specific consolidated accounts, bargain-purchase accounting and unresolved operating obligation transfer workflows remain implementation gaps, not merely deployment tasks.
+
+Date-range group reports use journal effective dates and recorded consolidation adjustments; compare with source transactions and disposed entity closing records. Do not treat them as certified financial statements. Check bargain acquisition evidence and group-only gain, no cash creation and zero goodwill.

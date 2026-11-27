@@ -5,6 +5,7 @@ import {disposeSubsidiary} from '../lib/subsidiary-disposal.mjs';
 import {processLoanObligations} from '../lib/loan-schedule.mjs';
 import {economySnapshot,advanceEconomy,recordSystemAssetPurchase} from '../lib/economy.mjs';
 import {createCompanyLoan,transitionCompanyLoan,repayCompanyLoan,createAcquisition,transitionAcquisition} from '../lib/operations.mjs';
+import {groupPeriodReport} from '../lib/group-period-report.mjs';
 import {startIntangibleSchedule,cancelIntangibleSchedule,processIntangibleSchedules} from '../lib/intangible-schedules.mjs';
 import {adjustAcquiredIntangible,payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
 import {captureGroupAccountHistory,listGroupAccountHistory} from '../lib/group-account-history.mjs';
@@ -248,6 +249,23 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   const deficitStatement=(await economySnapshot(user.id)).financialStatements.find(s=>s.companyId===deficitClosed.target_company_id);
   assert.equal(deficitStatement.equity,'-10.01');assert.equal(deficitStatement.balanceCheck,'0.00');
   assert.equal((await corporateFinanceSnapshot(user.id)).group.balanceCheck,'0.00');
+
+  const bargainDeal=await createAcquisition(user,{buyerCompanyId:a,targetName:'Reviewed bargain target',targetSector:'Tech',sellerName:'Seller',description:'Reassessed acquisition',purchasePrice:'10',targetValuation:'30',ownershipPercentage:'100',operationKey:uid()});
+  const bargainAllocation={cash:'0',fixedAssets:'30',intangibles:'0',payables:'0',zeroOpeningLiabilities:true,evidence:'Verified opening asset schedule.'};
+  await assert.rejects(()=>saveAcquisitionAllocation(user,bargainDeal.id,bargainAllocation),/Bargain-purchase/);
+  const ba=await saveAcquisitionAllocation(user,bargainDeal.id,{...bargainAllocation,bargainPurchaseReview:'Independent reassessment confirms asset values, completeness of liabilities and discounted purchase price.'});
+  assert.equal(ba.bargainGain,'20.00');
+  for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,bargainDeal.id,{area,status:'cleared',evidence:'Recorded bargain diligence '+area});
+  await transitionAcquisition(user,bargainDeal.id,{status:'approved',reason:'Reassessed and approved'});
+  const bargainBefore=(await corporateFinanceSnapshot(user.id)).group;
+  await transitionAcquisition(user,bargainDeal.id,{status:'completed',reason:'Approved purchase'});
+  const bargainAfter=(await corporateFinanceSnapshot(user.id)).group;
+  assert.equal(bargainAfter.goodwill,bargainBefore.goodwill);assert.equal(bargainAfter.bargainPurchaseGains,'20.00');assert.equal(bargainAfter.balanceCheck,'0.00');
+  const utcDay=new Date().toISOString().slice(0,10);
+  const period=await groupPeriodReport(user.id,utcDay,utcDay);
+  assert.equal(period.bargainGain,'20.00');assert.ok(period.companies.some(c=>c.disposed_at));
+  assert.equal((await groupPeriodReport(other.id,utcDay,utcDay)).companies.length,0);
+  assert.equal((await groupPeriodReport(other.id,utcDay,utcDay)).bargainGain,'0.00');
 
   // Simulate 72 hours of absence plus the current UTC day using a second tenant.
   // This exercises the real financial catch-up code without waiting three days.

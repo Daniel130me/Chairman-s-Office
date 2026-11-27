@@ -72,3 +72,10 @@ test('reviewed negative net assets use signed ownership rounding and reconcile',
  const r=consolidateGroup([{id:'p',name:'Parent'},{id:'s',name:'Deficit',parent_company_id:'p',ownership_percentage:'75'}],[{companyId:'p',assets:'100',cash:'80',liabilities:'0',equity:'100',revenue:'0',expenses:'0'},{companyId:'s',assets:'0',cash:'0',liabilities:'10.01',equity:'-10.01',revenue:'0',expenses:'0'}],[{investor_company_id:'p',target_company_id:'s',status:'active',cost_basis:'20',acquired_payables:'10.01'}]);
  assert.equal(r.goodwill,'27.51');assert.equal(r.balanceCheck,'0.00');assert.equal(r.parentEquity,'100.00');
 });
+
+test('reviewed bargain gain is non-cash group income and goodwill stays zero',()=>{
+ const a=acquisitionAllocation('100','75','100','200','0','0',false,true);
+ assert.equal(a.bargainGain,'125.00');assert.equal(a.goodwill,'0.00');
+ const r=consolidateGroup([{id:'p',name:'Parent'},{id:'s',name:'Target',parent_company_id:'p',ownership_percentage:'75'}],[{companyId:'p',assets:'1000',cash:'900',liabilities:'0',equity:'1000',revenue:'0',expenses:'0'},{companyId:'s',assets:'300',cash:'100',liabilities:'0',equity:'300',revenue:'0',expenses:'0'}],[{investor_company_id:'p',target_company_id:'s',status:'active',cost_basis:'100',acquired_cash:'100',acquired_fixed_assets:'200',bargain_gain:'125'}]);
+ assert.equal(r.goodwill,'0.00');assert.equal(r.balanceCheck,'0.00');assert.equal(r.netIncome,'125.00');assert.equal(r.parentEquity,'1125.00');assert.equal(r.cash,'1000.00');
+});
