@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {api} from './api.js';
-import {createMeetingAudioTracks} from './meeting-audio-tracks.js';
+import {createMeetingAudioTracks,waitForIceGathering} from './meeting-audio-tracks.js';
 // The peer carries live microphone audio to the transcription provider. The
 // durable meeting engine remains the only source of executive responses.
 export function useRealtimeMeetingMic({meetingId,onStartSpeaking,onTranscript,onError}){
@@ -84,11 +84,7 @@ export function useRealtimeMeetingMic({meetingId,onStartSpeaking,onTranscript,on
    s.pc.onconnectionstatechange=()=>{if(['failed','closed'].includes(s.pc.connectionState))fail('Streaming microphone disconnected.');};
    const offer=await s.pc.createOffer();await s.pc.setLocalDescription(offer);if(!live())return;
    // The one-shot SDP exchange requires gathered ICE candidates in the offer.
-   if(s.pc.iceGatheringState!=='complete')await new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{s.pc.removeEventListener('icegatheringstatechange',changed);reject(Error('Network route discovery timed out.'));},10000);
-    function changed(){if(s.pc.iceGatheringState==='complete'){clearTimeout(timer);s.pc.removeEventListener('icegatheringstatechange',changed);resolve();}}
-    s.pc.addEventListener('icegatheringstatechange',changed);changed();
-   });
+   await waitForIceGathering(s.pc,10000);
    if(!live())return;const localSdp=s.pc.localDescription?.sdp;if(!localSdp)throw Error('Microphone connection offer was unavailable.');
    const response=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{Authorization:'Bearer '+secret.value,'Content-Type':'application/sdp'},body:localSdp,signal:s.abort.signal});
    if(!response.ok)throw Error('Streaming microphone could not connect. Use recorded speech mode.');
