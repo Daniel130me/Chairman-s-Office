@@ -31,8 +31,11 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   await processCovenants(user.id);
   snap=await corporateFinanceSnapshot(user.id);
   assert.equal(snap.covenants.find(x=>x.loan_id===loan.id).last_status,'breached');
-  const refi={lender:'Replacement Bank',reason:'Lower rate',principal:'300',annualInterestRate:'3',termMonths:18,operationKey:uid()};
+  const refi={lender:'Replacement Bank',reason:'Lower rate',principal:'300',annualInterestRate:'3',termMonths:18,collateralAmount:'90',collateralDescription:'Replacement equipment pledge',minimumCash:'100',operationKey:uid()};
+  await assert.rejects(()=>refinanceLoan(user,loan.id,{...refi,collateralAmount:'101'}),/exceeds/);
   const r=await refinanceLoan(user,loan.id,refi);
+  const [pledge]=await sql('SELECT pledged_amount FROM loan_collateral WHERE user_id=$1 AND loan_id=$2',[user.id,r.new_loan_id]);assert.equal(pledge.pledged_amount,'90.00');
+  await assert.rejects(()=>refinanceLoan(user,loan.id,{...refi,collateralAmount:'80'}),/reference/);
   assert.equal((await refinanceLoan(user,loan.id,refi)).id,r.id);
   const [closed]=await sql('SELECT status,outstanding_principal FROM company_loans WHERE id=$1',[loan.id]);assert.equal(closed.status,'closed');assert.equal(closed.outstanding_principal,'0.00');
   const deal=await createAcquisition(user,{buyerCompanyId:a,targetName:'Minority target',targetSector:'Tech',sellerName:'Seller',description:'Strategic holding',purchasePrice:'200',targetValuation:'1000',ownershipPercentage:'20',operationKey:uid()});
