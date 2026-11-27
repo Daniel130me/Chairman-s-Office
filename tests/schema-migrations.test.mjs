@@ -44,3 +44,14 @@ test('asynchronous boardroom rounds have durable status and response tracking',(
 });
 
 test('meeting turns are linked to one durable round and unique per participant',()=>{assert.match(sql,/meeting_turns ADD COLUMN IF NOT EXISTS round_id/);assert.match(sql,/meeting_turns_round_contact_unique/);});
+
+
+test('subsidiary disposal uses paired PostgreSQL dollar-quoted bodies',async()=>{
+ const {subsidiaryDisposalSchema}=await import('../lib/subsidiary-disposal-schema.mjs');
+ assert.doesNotMatch(subsidiaryDisposalSchema,/\b(?:DO|AS) \$(?:\s|;)/);
+ const delimiters=[...subsidiaryDisposalSchema.matchAll(/\$(?:[a-zA-Z_][a-zA-Z_0-9]*)?\$/g)].map(m=>m[0]);
+ assert.equal(delimiters.length%2,0);
+ for(let i=0;i<delimiters.length;i+=2)assert.equal(delimiters[i],delimiters[i+1]);
+ assert.match(subsidiaryDisposalSchema,/DO \$facility_fk\$/);
+ assert.match(subsidiaryDisposalSchema,/LANGUAGE plpgsql AS \$facility_guard\$/);
+});
