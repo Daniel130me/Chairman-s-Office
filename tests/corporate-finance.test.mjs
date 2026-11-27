@@ -48,3 +48,10 @@ test('control-retaining sales preserve goodwill and reclassify disposal gains to
  const result=consolidateGroup([{id:'p',name:'Parent'},{id:'s',name:'Acquired',parent_company_id:'p',ownership_percentage:'65.00'}],[{companyId:'p',assets:'1020',cash:'760',liabilities:'0',equity:'1020',revenue:'20',expenses:'0',netIncome:'20'},{companyId:'s',assets:'300',cash:'100',liabilities:'0',equity:'300',revenue:'0',expenses:'0',netIncome:'0'}],[{investor_company_id:'p',target_company_id:'s',status:'active',carrying_amount:'260',acquired_cash:'100',acquired_fixed_assets:'200',original_ownership_percentage:'75',control_sale_basis:'40',control_sale_gains:'20'}]);
  assert.equal(result.goodwill,'75.00');assert.equal(result.nonControllingInterest,'105.00');assert.equal(result.netIncome,'0.00');assert.equal(result.equity,'1135.00');assert.equal(result.balanceCheck,'0.00');
 });
+
+test('acquired identifiable intangible assets and trade payables enter net assets without fictitious cash',()=>{
+ assert.deepEqual(acquisitionAllocation('300','75','100','200','80','40'),{netAssets:'340.00',parentShare:'255.00',goodwill:'45.00',openingNci:'85.00'});
+ assert.throws(()=>acquisitionAllocation('300','75','0','0','0','1'),/Negative acquired net assets/);
+ assert.deepEqual(accounts('acquired-payable'),['equity','acquired_payables']);
+ assert.deepEqual(accounts('acquired-payable-payment'),['acquired_payables','cash']);
+});
