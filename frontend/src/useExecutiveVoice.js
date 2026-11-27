@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {speechChunks} from '../../lib/executive-experience-rules.mjs';
 export function useExecutiveVoice({turns,members,enabled,notify}){
- const queue=useRef([]),seen=useRef(new Set()),running=useRef(false),generation=useRef(0),audio=useRef(null),abort=useRef(null),settle=useRef(null),on=useRef(enabled);
+ const queue=useRef([]),seen=useRef(new Set()),running=useRef(false),generation=useRef(0),audio=useRef(null),abort=useRef(null),settle=useRef(null),on=useRef(enabled),suppressed=useRef(new Set());
  const [speaker,setSpeaker]=useState(null),[mode,setMode]=useState('idle');
  on.current=enabled;
  function stop(){
@@ -9,6 +9,7 @@ export function useExecutiveVoice({turns,members,enabled,notify}){
   window.speechSynthesis?.cancel();running.current=false;setSpeaker(null);setMode('idle');
  }
  function skip(){stop();}
+ function suppressRound(id){if(id)suppressed.current.add(id);stop();}
  function localSpeech(text,member){
   return new Promise(resolve=>{
    if(!window.speechSynthesis||!window.SpeechSynthesisUtterance)return resolve();
@@ -44,7 +45,7 @@ export function useExecutiveVoice({turns,members,enabled,notify}){
  }
  function markHistory(history){seen.current=new Set(history.map(t=>t.id));}
  function replay(t){if(!on.current||!t.contact_id)return;stop();queue.current.push(t);void drain();}
- useEffect(()=>{if(!enabled){stop();return;}for(const t of turns){if(seen.current.has(t.id))continue;seen.current.add(t.id);if(t.contact_id)queue.current.push(t);}void drain();},[turns,enabled]);
+ useEffect(()=>{if(!enabled){for(const t of turns)seen.current.add(t.id);stop();return;}for(const t of turns){if(seen.current.has(t.id))continue;seen.current.add(t.id);if(t.contact_id&&!suppressed.current.has(t.round_id))queue.current.push(t);}void drain();},[turns,enabled]);
  useEffect(()=>()=>{generation.current++;queue.current=[];abort.current?.abort();audio.current?.pause();settle.current?.();window.speechSynthesis?.cancel();},[]);
- return {speaker,mode,skip,replay,markHistory};
+ return {speaker,mode,skip,replay,markHistory,suppressRound};
 }
