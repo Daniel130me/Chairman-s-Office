@@ -46,5 +46,7 @@ jobs:
         run: |
           node scripts/migrate.mjs
           node scripts/migrate.mjs
+      - name: Corporate finance database transactions
+        run: RUN_CORPORATE_FINANCE_DB_TESTS=1 node --test tests/corporate-finance-db.test.mjs
       - name: Verify production build
         run: npm run build
