@@ -37,3 +37,9 @@ test('fictional concierge quotes use recorded provider and bounded recorded pric
  assert.equal(parseReplacementQuote({...r,markupBasisPoints:5001},b),null);
  assert.equal(parseReplacementQuote({...r,feeBasisPoints:-1},b),null);
 });
+
+test('speech segmentation prefers a natural clause and short first audio segment',()=>{
+ const first='The investment is viable, but we should verify the cash forecast.';
+ const message=first+' '+('Further due diligence is required before the board can authorize the transaction. '.repeat(5)).trim();
+ const parts=speechChunks(message);assert.equal(parts[0],first);assert.equal(parts.join(' '),message);assert.ok(parts.every(s=>s.length<=180));
+});

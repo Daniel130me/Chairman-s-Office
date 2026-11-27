@@ -6,7 +6,8 @@ The boardroom keeps the application database as the source of truth for executiv
 - Typed and browser-dictated remarks.
 - Recorded utterance transcription (Groq) with local speech activity detection.
 - Optional WebRTC live microphone transcription (OpenAI `gpt-live-transcribe`), local speech boundary detection and explicit commits; provisional live captions are not persisted.
-- Generated executive replies are committed before voice playback; speech segments are prefetched one segment ahead. This is not native continuous speech-to-speech synthesis.
+- Generated executive replies are committed before voice playback. Natural clause boundaries, a shorter first segment for long remarks, late-arriving next-speaker prefetch, and bounded per-meeting in-memory audio replay caching reduce avoidable gaps and provider requests. Confirmed microphone speech takes the floor immediately rather than waiting for transcription. This remains segmented audio, not native continuous speech-to-speech synthesis.
+- The boardroom displays actual submission-to-first-audio latency from the browser. It excludes transcription time and replay; use the end-of-speech acceptance measurement separately.
 
 ## Enable a separate test environment
 Set `MEETING_REALTIME_ENABLED=1` and configure a server-only `OPENAI_API_KEY` with access to the live transcription model. Leave the flag off in production until provider and device acceptance. Never put the standard API key in the frontend. Explicit user consent is required for each streaming microphone session; audio streams directly to OpenAI and can incur usage costs. A short-lived client secret is returned to the authenticated browser; the server tracks credential issuance attempts (12 per user in a rolling day and a 15-second reconnect cooldown). The browser disconnects on navigation/hidden page and after 20 minutes. The client timeout is not a provider-side spending cap; set appropriate project limits and monitor usage independently.

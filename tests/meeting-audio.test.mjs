@@ -37,3 +37,11 @@ test('closing the microphone aborts a pending ICE wait immediately',async()=>{
  const controller=new AbortController(),waiting=waitForIceGathering(peer,10000,controller.signal);
  controller.abort();await assert.rejects(waiting,{name:'AbortError'});assert.equal(listeners.size,0);
 });
+
+import {createVoiceAudioCache,nextVoiceSegment} from '../frontend/src/meeting-playback-cache.js';
+test('executive audio cache is bounded and evicts least recently used audio',()=>{
+ const c=createVoiceAudioCache({maxEntries:2,maxBytes:10}),a={size:4},b={size:4};c.set('a',a);c.set('b',b);assert.equal(c.get('a'),a);c.set('c',{size:4});assert.equal(c.get('b'),undefined);assert.equal(c.get('a'),a);c.set('oversize',{size:11});assert.equal(c.size(),2);c.clear();assert.equal(c.size(),0);
+});
+test('audio prefetch advances to the next executive only after final segment',()=>{
+ const a={id:'a'},b={id:'b'};assert.deepEqual(nextVoiceSegment(a,0,2,[b]),{turn:a,index:1});assert.deepEqual(nextVoiceSegment(a,1,2,[b]),{turn:b,index:0});assert.equal(nextVoiceSegment(a,1,2,[]),null);
+});
