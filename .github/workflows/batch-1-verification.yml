@@ -1,9 +1,9 @@
 name: Batch 1 verification
 on:
   push:
-    branches: [batch-1-living-world-intelligence, living-world]
+    branches: [batch-1-living-world-intelligence, batch-2-corporate-empire-finance, living-world]
   pull_request:
-    branches: [living-world]
+    branches: [living-world, batch-1-living-world-intelligence]
   workflow_dispatch:
 permissions:
   contents: read
