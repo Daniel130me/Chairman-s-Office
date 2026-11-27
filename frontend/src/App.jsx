@@ -3,6 +3,7 @@ import {Phone,PhoneOff,MessageCircle,Users,CalendarDays,BriefcaseBusiness,Landma
 import Vapi from '@vapi-ai/web';
 import { authClient } from '../../lib/auth/client.js';
 import{api,usd,shortDate,shortTime,toUint8}from './api.js';import{playRing,stopRing,clickTone}from './sound.js';
+import {useExecutiveVoice} from './useExecutiveVoice.js';
 import AdvancedOperations from './AdvancedOperations.jsx';
 import CorporateFinance from './CorporateFinance.jsx';
 import {buildActivityFeed,mergeActivityHistory} from './activity-feed.js';
@@ -171,6 +172,7 @@ async function finishVoice(stop,status='completed'){
   finally{finishingRef.current=false;}
 }
 async function hangup(){await finishVoice(true);}
+useEffect(()=>{if(!call?.call?.id)return;const id=call.call.id;const save=()=>{if(callRef.current!==id)return;api('/calls/'+id+'/checkpoint',{method:'POST',body:{transcript:transcriptRef.current}}).catch(()=>{});};save();const timer=setInterval(save,15000);window.addEventListener('online',save);return()=>{clearInterval(timer);window.removeEventListener('online',save);};},[call?.call?.id]);
 const currentContact=contact=>world?.contacts?.find(c=>c.id===contact);
 const pending=world?.invites?.filter(x=>x.status==='pending'&&new Date(x.due_at)<=new Date())||[];
 const chiefName=world?.contacts?.find(x=>x.title==='Chief of Staff')?.name||'Chief of Staff';
@@ -403,13 +405,21 @@ function Calendar({state,onBack,onCreate,onOpen}){const[form,setForm]=useState(f
 function Boardroom({state,onBack,onOpen,onNew}){return <><AppHeader title="Boardroom" back={onBack} subtitle="Where strategic decisions are made" action={<button className="icon-circle" onClick={onNew}><Plus/></button>}/><div className="board-hero"><div className="board-graphic"><span/><span/><span/><span/><span/></div><p>THE BOARDROOM</p><h2>Every voice matters.<br/>Every decision counts.</h2><small>Conduct multi-executive discussions with distinct perspectives and persistent minutes.</small><Primary onClick={onNew}><Plus size={17}/> Schedule a meeting</Primary></div><div className="content-section"><h3>Meetings</h3>{state.meetings.map(m=><button key={m.id} className="agenda-row" onClick={()=>onOpen(m)}><div className="agenda-date"><BriefcaseBusiness size={24}/></div><div><b>{m.title}</b><small>{shortDate(m.start_at)} · {m.status}</small></div><ChevronRight/></button>)}{!state.meetings.length&&<Empty title="Your board awaits" description="Schedule a session to convene your leadership team."/>}</div></>}
 function Meeting({m,state,onBack,onChange,notify}){
  const [text,setText]=useState(''),[turns,setTurns]=useState([]),[busy,setBusy]=useState(false),[ended,setEnded]=useState(m.status==='concluded'),[voiceEnabled,setVoiceEnabled]=useState(true),[roundProgress,setRoundProgress]=useState({saved:0,expected:0});
- const chatEndRef=useRef(),spoken=useRef(new Set()),active=useRef(true);
+ const chatEndRef=useRef(),active=useRef(true),recognizer=useRef(null),speakingLock=useRef(false);const [listening,setListening]=useState(false);
  const members=state.contacts.filter(c=>m.attendees.includes(c.id));
+ const voice=useExecutiveVoice({turns,members,enabled:voiceEnabled,notify});
  const [motionTitle,setMotionTitle]=useState(''),[motionText,setMotionText]=useState(''),[motionKey,setMotionKey]=useState(()=>crypto.randomUUID()),[motionBusy,setMotionBusy]=useState(false);
  async function createMotion(e){e.preventDefault();setMotionBusy(true);try{await api('/meetings/'+m.id+'/motions',{method:'POST',body:{title:motionTitle,proposal:motionText,operationKey:motionKey}});setMotionTitle('');setMotionText('');setMotionKey(crypto.randomUUID());await onChange();notify('Advisory vote opened. Executives will vote independently.');}catch(e){notify(e.message)}finally{setMotionBusy(false)}}
  async function decideMotion(motion,decision){const reason=window.prompt('Reason for final decision:');if(!reason?.trim())return;setMotionBusy(true);try{await api('/board-motions/'+motion.id+'/decide',{method:'POST',body:{decision,reason}});await onChange();notify('Board resolution recorded.');}catch(e){notify(e.message)}finally{setMotionBusy(false)}}
- function dictate(){const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!Recognition){notify('Speech input is not supported by this browser. Use text to speak.');return;}const recognition=new Recognition();recognition.lang='en-US';recognition.interimResults=false;recognition.onresult=e=>setText(old=>(old+' '+e.results[0][0].transcript).trim());recognition.onerror=()=>notify('Microphone input unavailable.');try{recognition.start()}catch(e){notify(e.message)}}
- 
+ function dictate(sendImmediately=false){
+  if(listening){recognizer.current?.stop();return;}
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Recognition){notify('Speech input unavailable. Use text to address the board.');return;}
+  voice.skip();const recognition=new Recognition();recognizer.current=recognition;recognition.lang='en-US';recognition.interimResults=false;
+  recognition.onresult=e=>{const message=Array.from(e.results).map(r=>r[0].transcript).join(' ').trim();if(sendImmediately&&message)void speak(message);else setText(old=>(old+' '+message).trim());};
+  recognition.onerror=()=>notify('Microphone input unavailable.');recognition.onend=()=>{setListening(false);recognizer.current=null;};
+  try{recognition.start();setListening(true);}catch(e){notify(e.message);}
+ }
  async function pollRound(roundId){
   setBusy(true);
   for(let i=0;i<200;i++){
@@ -433,38 +443,26 @@ function Meeting({m,state,onBack,onChange,notify}){
   active.current=true;
   Promise.all([api(`/meetings/${m.id}/turns`),api(`/meetings/${m.id}/rounds`)]).then(([turnResult,roundResult])=>{
    if(!active.current)return;
-   setTurns(turnResult.turns);spoken.current=new Set(turnResult.turns.map(t=>t.id));
+   voice.markHistory(turnResult.turns);setTurns(turnResult.turns);
    const current=roundResult.rounds.find(r=>['pending','running'].includes(r.status));
    if(current){setRoundProgress({saved:current.responses_saved,expected:current.expected_responses});pollRound(current.id);}
   }).catch(e=>notify(e.message));
-  return()=>{active.current=false;if(typeof window!=='undefined'&&'speechSynthesis' in window)window.speechSynthesis.cancel();};
+  return()=>{active.current=false;recognizer.current?.abort();};
  },[m.id]);
  useEffect(()=>{chatEndRef.current?.scrollIntoView({behavior:'smooth'});},[turns.length]);
- useEffect(()=>{
-  for(const turn of turns){
-   if(spoken.current.has(turn.id))continue;
-   spoken.current.add(turn.id);
-   if(!turn.contact_id||!voiceEnabled||typeof window==='undefined'||!('speechSynthesis' in window))continue;
-   const available=window.speechSynthesis.getVoices(),english=available.filter(v=>String(v.lang||'').toLowerCase().startsWith('en')),pool=english.length?english:available;
-   const index=Math.max(0,members.findIndex(c=>c.id===turn.contact_id)),utterance=new SpeechSynthesisUtterance(turn.message);
-   if(pool.length)utterance.voice=pool[index%pool.length];
-   utterance.rate=0.96+(index%3)*0.03;utterance.pitch=0.9+(index%4)*0.07;
-   window.speechSynthesis.speak(utterance);
-  }
- },[turns,voiceEnabled,members]);
- async function speak(){
-  if(busy||ended)return;
+ async function speak(message){
+  if(busy||ended||speakingLock.current)return;
+  speakingLock.current=true;voice.skip();
   if(voiceEnabled&&typeof window!=='undefined'&&'speechSynthesis' in window){const warmup=new SpeechSynthesisUtterance('');warmup.volume=0;window.speechSynthesis.speak(warmup);}
   setBusy(true);
   try{
-   const result=await api(`/meetings/${m.id}/speak`,{method:'POST',body:{message:text||'May I hear your assessment and any objections?'}});
+   const result=await api(`/meetings/${m.id}/speak`,{method:'POST',body:{message:typeof message==='string'&&message.trim()?message:text||'May I hear your assessment and any objections?'}});
    setText('');setRoundProgress({saved:0,expected:result.expectedResponses||members.length});
    await pollRound(result.roundId);
-  }catch(e){setBusy(false);notify(e.message)}
+  }catch(e){setBusy(false);notify(e.message)}finally{speakingLock.current=false;}
  }
  async function end(){
-  setBusy(true);
-  if(typeof window!=='undefined'&&'speechSynthesis' in window)window.speechSynthesis.cancel();
+  setBusy(true);voice.skip();recognizer.current?.abort();
   try{await api(`/meetings/${m.id}/end`,{method:'POST',body:{}});setEnded(true);await onChange();notify('Meeting concluded and minutes filed.')}
   catch(e){notify(e.message)}finally{setBusy(false)}
  }
@@ -472,7 +470,7 @@ function Meeting({m,state,onBack,onChange,notify}){
   const next=!voiceEnabled;setVoiceEnabled(next);
   if(typeof window!=='undefined'&&'speechSynthesis' in window){if(!next)window.speechSynthesis.cancel();else{const warmup=new SpeechSynthesisUtterance('');warmup.volume=0;window.speechSynthesis.speak(warmup);}}
  }
- return <div className="meeting-app"><div className="meeting-top"><button className="icon-circle" onClick={onBack}><ChevronLeft/></button><div><b>{m.title}</b><small>{ended?'Meeting concluded':'Executive boardroom · live discussion'}</small></div><button className="icon-circle" onClick={toggleVoice} title={voiceEnabled?'Turn executive voice playback off':'Turn executive voice playback on'}>{voiceEnabled?<Volume2/>:<VolumeX/>}</button></div><div className="participant-strip">{members.map(c=><div key={c.id}><Avatar name={c.name} size={54}/><small>{c.name.split(' ')[0]}</small></div>)}</div><div className="meeting-chat"><div className="meeting-note">PRIVATE & CONFIDENTIAL · {members.length} PARTICIPANTS · {voiceEnabled?'VOICE PLAYBACK ON':'VOICE PLAYBACK OFF'}</div>{turns.map(t=><div className="speaker-turn" key={t.id}><Avatar name={t.speaker} size={35}/><div><strong>{t.speaker}</strong><p>{t.message}</p><small>{shortTime(t.created_at)}</small></div></div>)}{busy&&<div className="meeting-note">The executives are discussing your remarks. {roundProgress.saved} of {roundProgress.expected} responses recorded…</div>}<div className="content-section"><h3>Board resolutions</h3>{(state.boardMotions||[]).filter(x=>x.meeting_id===m.id).map(x=><div className="detail-section" key={x.id}><b>{x.title} · {x.status}</b><p>{x.proposal}</p>{(state.boardVotes||[]).filter(v=>v.motion_id===x.id).map(v=><p key={v.id}>{v.name}: {v.vote||'Awaiting vote'} {v.rationale||''}</p>)}{x.chairman_reason&&<p>Decision: {x.chairman_reason}</p>}{['recommended','not-recommended','no-quorum'].includes(x.status)&&<>{x.status!=='no-quorum'&&<button disabled={motionBusy} onClick={()=>decideMotion(x,'adopted')}>Adopt resolution</button>}<button disabled={motionBusy} onClick={()=>decideMotion(x,'rejected')}>Reject resolution</button></>}</div>)}{!ended&&<form className="form-card" onSubmit={createMotion}><label>Motion title<input required value={motionTitle} onChange={e=>setMotionTitle(e.target.value)}/></label><label>Proposed resolution<textarea required value={motionText} onChange={e=>setMotionText(e.target.value)}/></label><button className="primary-btn" disabled={motionBusy}>Open advisory vote</button></form>}<button disabled={motionBusy} onClick={()=>onChange()}>Refresh votes</button><p>Advisory votes do not authorize financial transactions or personnel changes.</p></div><div ref={chatEndRef}/></div>{!ended?<div className="meeting-compose"><textarea value={text} onChange={e=>setText(e.target.value)} placeholder="Address the board or ask a question…" rows={2}/><div><button className="text-danger" onClick={end} disabled={busy}>Conclude</button><button type="button" disabled={busy} onClick={dictate}>Dictate</button><button className="primary-mini" onClick={speak} disabled={busy}><Send size={18}/> Speak</button></div></div>:<div className="meeting-concluded"><Check size={18}/> Minutes filed in Documents</div>}</div>;
+ return <div className="meeting-app"><div className="meeting-top"><button className="icon-circle" onClick={onBack}><ChevronLeft/></button><div><b>{m.title}</b><small>{ended?'Meeting concluded':'Executive boardroom · live discussion'}</small></div><button className="icon-circle" onClick={toggleVoice} title={voiceEnabled?'Turn executive voice playback off':'Turn executive voice playback on'}>{voiceEnabled?<Volume2/>:<VolumeX/>}</button></div><div className="participant-strip">{members.map(c=><div key={c.id} className={voice.speaker===c.id?'speaking-participant':''}><Avatar name={c.name} size={54}/><small>{c.name.split(' ')[0]}{voice.speaker===c.id?' · Speaking':''}</small></div>)}</div><div className="meeting-chat"><div className="meeting-note">PRIVATE & CONFIDENTIAL · {members.length} PARTICIPANTS · {voiceEnabled?'VOICE PLAYBACK ON':'VOICE PLAYBACK OFF'}{voice.speaker?' · '+(voice.mode==='provider'?'EXECUTIVE AUDIO':'DEVICE AUDIO'):''}{voice.speaker&&<button onClick={voice.skip}>Interrupt playback</button>}</div>{turns.map(t=><div className="speaker-turn" key={t.id}><Avatar name={t.speaker} size={35}/><div><strong>{t.speaker}</strong><p>{t.message}</p><small>{shortTime(t.created_at)}</small>{t.contact_id&&voiceEnabled&&<button type="button" onClick={()=>voice.replay(t)}>Replay voice</button>}</div></div>)}{busy&&<div className="meeting-note">The executives are discussing your remarks. {roundProgress.saved} of {roundProgress.expected} responses recorded…</div>}<div className="content-section"><h3>Board resolutions</h3>{(state.boardMotions||[]).filter(x=>x.meeting_id===m.id).map(x=><div className="detail-section" key={x.id}><b>{x.title} · {x.status}</b><p>{x.proposal}</p>{(state.boardVotes||[]).filter(v=>v.motion_id===x.id).map(v=><p key={v.id}>{v.name}: {v.vote||'Awaiting vote'} {v.rationale||''}</p>)}{x.chairman_reason&&<p>Decision: {x.chairman_reason}</p>}{['recommended','not-recommended','no-quorum'].includes(x.status)&&<>{x.status!=='no-quorum'&&<button disabled={motionBusy} onClick={()=>decideMotion(x,'adopted')}>Adopt resolution</button>}<button disabled={motionBusy} onClick={()=>decideMotion(x,'rejected')}>Reject resolution</button></>}</div>)}{!ended&&<form className="form-card" onSubmit={createMotion}><label>Motion title<input required value={motionTitle} onChange={e=>setMotionTitle(e.target.value)}/></label><label>Proposed resolution<textarea required value={motionText} onChange={e=>setMotionText(e.target.value)}/></label><button className="primary-btn" disabled={motionBusy}>Open advisory vote</button></form>}<button disabled={motionBusy} onClick={()=>onChange()}>Refresh votes</button><p>Advisory votes do not authorize financial transactions or personnel changes.</p></div><div ref={chatEndRef}/></div>{!ended?<div className="meeting-compose"><textarea value={text} onChange={e=>setText(e.target.value)} placeholder="Address the board or ask a question…" rows={2}/><div><button className="text-danger" onClick={end} disabled={busy}>Conclude</button><button type="button" disabled={busy} onClick={()=>dictate(false)}>{listening?'Stop mic':'Dictate'}</button><button type="button" disabled={busy} onClick={()=>dictate(true)}>{listening?'Stop mic':'Speak by voice'}</button><button className="primary-mini" onClick={()=>speak()} disabled={busy}><Send size={18}/> Speak</button></div></div>:<div className="meeting-concluded"><Check size={18}/> Minutes filed in Documents</div>}</div>;
 }
 
 function Finance({state,onBack,onChange,notify}){
