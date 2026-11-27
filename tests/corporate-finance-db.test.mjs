@@ -133,6 +133,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   await setLoanTerms(user,lenderTwo.id,{kind:'collateral',amount:'2.50',description:'Equipment pool secured to Bank B'});
   await transitionCompanyLoan(user,lenderTwo.id,{status:'approved',reason:'Board approved Bank B facility'});
   await transitionCompanyLoan(user,lenderTwo.id,{status:'disbursed',reason:'Bank B funds received'});
+  await sql("UPDATE company_loan_installments SET due_date=(now() AT TIME ZONE 'UTC')::date-1 WHERE loan_id=$1 AND installment=1",[lenderOne.id]);
 
   const internal={lenderCompanyId:nestedParent.target_company_id,borrowerCompanyId:nestedChild.target_company_id,amount:'5',purpose:'Intercompany working capital',operationKey:uid()};
   const internalFacility=await advanceIntercompany(user,internal);
@@ -145,6 +146,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(nestedExit.closing_statement.subsidiaryCount,1);assert.equal(nestedExit.closing_statement.intercompanyEliminated,'5.00');
   assert.equal(nestedExit.closing_statement.transferredLoans.length,2);
   assert.equal(nestedExit.closing_statement.transferredLoans.reduce((n,l)=>n+Number(l.outstanding_principal),0),30);
+  assert.ok(Number(nestedExit.closing_statement.transferredLoans.find(l=>l.lender_name==='Nested Bank A').accrued_interest_due)>0);
   assert.equal(nestedExit.closing_statement.intercompanyFacilities.length,1);
   const [transferredFacility]=await sql('SELECT transferred_at,transferred_to FROM intercompany_facilities WHERE id=$1',[internalFacility.id]);
   assert.ok(transferredFacility.transferred_at);assert.equal(transferredFacility.transferred_to,exit.buyer);
