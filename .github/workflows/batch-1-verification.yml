@@ -58,10 +58,11 @@ jobs:
         env:
           PGPASSWORD: chairman_ci
         run: |
-          pg_dump --version
-          pg_dump -h 127.0.0.1 -U chairman_ci -Fc chairman_ci -f /tmp/chairman-ci.dump
-          createdb -h 127.0.0.1 -U chairman_ci chairman_restore
-          pg_restore -h 127.0.0.1 -U chairman_ci --exit-on-error -d chairman_restore /tmp/chairman-ci.dump
+          # Use PostgreSQL 16 clients with the PostgreSQL 16 service.
+          docker run --rm --network host -e PGPASSWORD postgres:16 pg_dump --version
+          docker run --rm --network host -e PGPASSWORD postgres:16 pg_dump -h 127.0.0.1 -U chairman_ci -Fc chairman_ci > /tmp/chairman-ci.dump
+          docker run --rm --network host -e PGPASSWORD postgres:16 createdb -h 127.0.0.1 -U chairman_ci chairman_restore
+          docker run --rm -i --network host -e PGPASSWORD postgres:16 pg_restore -h 127.0.0.1 -U chairman_ci --exit-on-error -d chairman_restore < /tmp/chairman-ci.dump
           DATABASE_URL=postgresql://chairman_ci:chairman_ci@127.0.0.1:5432/chairman_restore?sslmode=disable npm run db:reconcile
           rm -f /tmp/chairman-ci.dump
       - name: Verify production build

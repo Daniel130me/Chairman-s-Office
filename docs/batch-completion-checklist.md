@@ -25,7 +25,7 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Buyer assumption of multiple disbursed loan facilities and acquired trade payables; accrued interest through disposal, creditor-by-creditor evidence, preserved loan/payment history and seller-side servicing fences.
 - [x] Multiple named trade creditors within a single acquisition allocation, individual payment histories and disposal transfer evidence.
 - [x] Forward-only immutable daily group-account observations, captured by the world engine and displayed in Corporate Finance; automated integration regression added (verification pending).
-- [ ] Transfer of external intercompany facilities, contracts, purchase orders, employees and other unresolved operating obligations (currently blocked safely); true period-specific consolidated income reporting; negative net assets/bargain purchases; richer ownership/covenant mechanisms.
+- [ ] Transfer of external intercompany facilities, contracts, purchase orders, employees and other unresolved operating obligations (currently blocked safely); true period-specific consolidated income reporting; bargain purchases; richer ownership/covenant mechanisms.
 - [x] Approved monthly acquired-intangible schedules, impairment-aware remaining charges, bounded missed-period catch-up, cancellation and manual-charge fencing; CI verification pending.
 - [x] Evidence-backed acquired intangible amortization and impairment, posted as non-cash charges with carrying-value limits, immutable opening allocation, history and reconciliation; CI verification pending.
 - [ ] Final merge and live ledger reconciliation.
@@ -80,3 +80,5 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [ ] Test live autonomous offline progression (including multi-day absence and duplicate prevention), activity history and every phone app.
 - [ ] Verify Android/iPhone PWA, notifications, deep links, offline recovery, multi-user isolation, security, backups, performance and monitoring.
 - [ ] Close all deferred scope above or explicitly obtain scope approval before declaring the application complete.
+
+- [x] Explicitly reviewed negative opening net assets, signed ownership rounding and consolidation; active acquired-intangible schedules cancelled when control transfers. Added cross-origin private audio protection and hidden-page playback cancellation; verification pending.

@@ -6,7 +6,7 @@ export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onP
  if(!cache.current)cache.current=createVoiceAudioCache();
  const [speaker,setSpeaker]=useState(null),[mode,setMode]=useState('idle');
  config.current={members,enabled,paused,notify,onPlayback,progressiveAudio};
- const playable=()=>config.current.enabled&&!config.current.paused;
+ const playable=()=>config.current.enabled&&!config.current.paused&&!document.hidden;
  function cancelRequests(){for(const entry of requests.current.values())entry.controller.abort();requests.current.clear();}
  function stop(clear=true){
   generation.current++;playingSegment.current=null;if(clear)queue.current=[];cancelRequests();audio.current?.pause();settle.current?.();settle.current=null;
@@ -106,6 +106,7 @@ export function useExecutiveVoice({turns,members,enabled,paused=false,notify,onP
  function markHistory(history){seen.current=new Set(history.map(t=>t.id));}
  function replay(t){if(!playable()||!t.contact_id)return;stop();queue.current.push({...t,replay:true});void drain();}
  useEffect(()=>{if(paused)stop(false);},[paused]);
+ useEffect(()=>{const hidden=()=>{if(document.hidden)stop();};document.addEventListener('visibilitychange',hidden);return()=>document.removeEventListener('visibilitychange',hidden);},[]);
  useEffect(()=>{
   if(!enabled){for(const t of turns)seen.current.add(t.id);stop();return;}
   for(const t of turns){if(seen.current.has(t.id))continue;seen.current.add(t.id);if(t.contact_id&&!suppressed.current.has(t.round_id))queue.current.push(t);}

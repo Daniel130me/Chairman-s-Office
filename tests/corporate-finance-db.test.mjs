@@ -237,6 +237,18 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   await processIntangibleSchedules(user.id);
   assert.equal((await economySnapshot(user.id)).financialStatements.find(s=>s.companyId===intangibleCompleted.target_company_id).intangibleAssets,'5.00');
 
+  const deficitDeal=await createAcquisition(user,{buyerCompanyId:a,targetName:'Reviewed deficit target',targetSector:'Tech',sellerName:'Seller',description:'Reviewed restructuring purchase',purchasePrice:'20',targetValuation:'20',ownershipPercentage:'75',operationKey:uid()});
+  const deficitAllocation={cash:'0',fixedAssets:'0',intangibles:'0',payables:'10.01',payableCreditor:'Deficit vendor',allOpeningLiabilitiesRecorded:true,evidence:'Verified deficit creditor statement.'};
+  await assert.rejects(()=>saveAcquisitionAllocation(user,deficitDeal.id,deficitAllocation),/Negative acquired net assets/);
+  const deficit=await saveAcquisitionAllocation(user,deficitDeal.id,{...deficitAllocation,negativeNetAssetsReview:'Independent liability review confirms opening deficit and approved parent funding plan.'});
+  assert.equal(deficit.goodwill,'27.51');
+  for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,deficitDeal.id,{area,status:'cleared',evidence:'Recorded reviewed deficit diligence '+area});
+  await transitionAcquisition(user,deficitDeal.id,{status:'approved',reason:'Reviewed deficit and funding rationale'});
+  const deficitClosed=await transitionAcquisition(user,deficitDeal.id,{status:'completed',reason:'Approved closing'});
+  const deficitStatement=(await economySnapshot(user.id)).financialStatements.find(s=>s.companyId===deficitClosed.target_company_id);
+  assert.equal(deficitStatement.equity,'-10.01');assert.equal(deficitStatement.balanceCheck,'0.00');
+  assert.equal((await corporateFinanceSnapshot(user.id)).group.balanceCheck,'0.00');
+
   // Simulate 72 hours of absence plus the current UTC day using a second tenant.
   // This exercises the real financial catch-up code without waiting three days.
   const absentWorld=uid(),absentCompany=uid();

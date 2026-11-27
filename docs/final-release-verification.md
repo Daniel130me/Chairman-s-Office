@@ -27,3 +27,5 @@ Stop further promotion if an invariant, authorization boundary, migration or req
 
 ## Read-only operational health
 Run `npm run engine:health` in the intended environment. It reports aggregate stale worlds, repeat stage errors, worker heartbeat and stale meetings without exposing user IDs or messages. Thresholds (30-minute world delay, 20-minute worker heartbeat, 3 consecutive failures) are initial operational defaults and must be tuned against real load. CI also rehearses a PostgreSQL dump/restore against its isolated fixture database and runs invariant checks before and after; this is not a production Neon recovery rehearsal.
+
+The isolated restore rehearsal uses PostgreSQL 16 client tools matching the service, avoiding PostgreSQL 18-only configuration statements. No production credentials or snapshots are used.

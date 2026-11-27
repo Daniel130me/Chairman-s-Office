@@ -65,3 +65,10 @@ test('loss of control includes retained interest and derecognizes net assets, go
  assert.throws(()=>lossOfControlCalculation({...terms,sold:'65'}),/retained/);
  assert.equal(lossOfControlCalculation({...terms,sold:'65',retainedValue:'0'}).remainingStake,'0.00');
 });
+
+test('reviewed negative net assets use signed ownership rounding and reconcile',()=>{
+ const a=acquisitionAllocation('20','75','0','0','0','10.01',true);
+ assert.deepEqual(a,{netAssets:'-10.01',parentShare:'-7.51',goodwill:'27.51',openingNci:'-2.50'});
+ const r=consolidateGroup([{id:'p',name:'Parent'},{id:'s',name:'Deficit',parent_company_id:'p',ownership_percentage:'75'}],[{companyId:'p',assets:'100',cash:'80',liabilities:'0',equity:'100',revenue:'0',expenses:'0'},{companyId:'s',assets:'0',cash:'0',liabilities:'10.01',equity:'-10.01',revenue:'0',expenses:'0'}],[{investor_company_id:'p',target_company_id:'s',status:'active',cost_basis:'20',acquired_payables:'10.01'}]);
+ assert.equal(r.goodwill,'27.51');assert.equal(r.balanceCheck,'0.00');assert.equal(r.parentEquity,'100.00');
+});
