@@ -19,6 +19,7 @@ test('keeps a correctly addressed first-person voicemail',()=>{
 });
 test('fallback voicemail preserves caller and recipient roles',()=>{
  assert.equal(fallbackFollowup({recipientName:'Oluwagbenga',recipientTitle:'Chairman',reason:'Daniella would like to review your priorities and outstanding decisions.'}).body,'Chairman Oluwagbenga, I was calling to review your priorities and outstanding decisions. Please let me know when you are available.');
+ assert.equal(fallbackFollowup({recipientName:'Oluwagbenga',recipientTitle:'Chairman',reason:'Daniel Mercer needs your direction on Strategic acquisition opportunity.'}).body,'Chairman Oluwagbenga, I was calling to get your direction on Strategic acquisition opportunity. Please let me know when you are available.');
  assert.match(fallbackFollowup({recipientName:'Oluwagbenga',recipientTitle:'Chairman',callDirection:'outgoing'}).body,/I saw your call but could not answer/);
 });
 
