@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {sql,uid,database,transaction} from '../backend/src/db.mjs';
 import {recordSystemAssetPurchase} from '../lib/economy.mjs';
 import {createCompanyLoan,transitionCompanyLoan,createAcquisition,transitionAcquisition} from '../lib/operations.mjs';
-import {saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
+import {payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
 const enabled=process.env.RUN_CORPORATE_FINANCE_DB_TESTS==='1';
 test('corporate finance transaction integration on an isolated CI database',{skip:!enabled,timeout:60000},async()=>{
  // Never execute fixtures on a production database.
@@ -53,7 +53,7 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(adjusted.carrying_amount,'75.00');assert.equal(adjusted.ownership_percentage,'10.00');
   assert.equal(snap.group.balanceCheck,'0.00');
   const control=await createAcquisition(user,{buyerCompanyId:a,targetName:'Control target',targetSector:'Tech',sellerName:'Seller',description:'Acquired operating assets',purchasePrice:'300',targetValuation:'400',ownershipPercentage:'75',operationKey:uid()});
-  const allocation={cash:'100',fixedAssets:'200',zeroOpeningLiabilities:true,evidence:'Recorded asset schedule and clean liabilities statement'};
+  const allocation={cash:'100',fixedAssets:'200',intangibles:'40',payables:'40',allOpeningLiabilitiesRecorded:true,intangibleEvidence:'Recorded transferable licence valuation',payableCreditor:'Fictional vendor',evidence:'Recorded asset schedule and trade creditor statement'};
   await assert.rejects(()=>saveAcquisitionAllocation(other,control.id,allocation),/before approval/);
   const al=await saveAcquisitionAllocation(user,control.id,allocation);assert.equal(al.goodwill,'75.00');
   for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,control.id,{area,status:'cleared',evidence:'Recorded diligence for '+area});
@@ -65,6 +65,12 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   assert.equal(acquired.target_company_id,completed.target_company_id);assert.equal(snap.group.goodwill,'75.00');assert.equal(snap.group.openingEquityEliminated,'225.00');
   assert.equal(snap.group.nonControllingInterest,'75.00');assert.equal(snap.group.balanceCheck,'0.00');
   const [cash]=await sql('SELECT cash FROM companies WHERE id=$1',[completed.target_company_id]);assert.equal(cash.cash,'100.00');
+  const opening=await economySnapshot(user.id);const statement=opening.financialStatements.find(x=>x.companyId===completed.target_company_id);assert.equal(statement.intangibleAssets,'40.00');assert.equal(statement.acquiredPayables,'40.00');assert.equal(statement.balanceCheck,'0.00');
+  const payable={amount:'20',evidence:'Confirmed creditor payment in fictional records',operationKey:uid()};
+  await assert.rejects(()=>payAcquisitionPayable(other,al.id,payable),/unavailable/);
+  const receipt=await payAcquisitionPayable(user,al.id,payable);assert.equal((await payAcquisitionPayable(user,al.id,payable)).id,receipt.id);
+  await assert.rejects(()=>payAcquisitionPayable(user,al.id,{...payable,amount:'21',operationKey:uid()}),/exceeds/);
+  const afterPay=await economySnapshot(user.id);const paidStatement=afterPay.financialStatements.find(x=>x.companyId===completed.target_company_id);assert.equal(paidStatement.cash,'80.00');assert.equal(paidStatement.acquiredPayables,'20.00');assert.equal(paidStatement.balanceCheck,'0.00');
   await assert.rejects(()=>adjustInvestment(user,acquired.id,{kind:'impairment',amount:'76',reason:'Unsupported write-down',operationKey:uid()}),/impairment review/);
   await adjustInvestment(user,acquired.id,{kind:'impairment',amount:'25',reason:'Documented goodwill loss',operationKey:uid()});
   snap=await corporateFinanceSnapshot(user.id);assert.equal(snap.group.goodwill,'50.00');assert.equal(snap.group.balanceCheck,'0.00');
