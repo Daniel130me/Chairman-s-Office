@@ -102,13 +102,15 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   const d=await disposeSubsidiary(user,acquired.id,exit);assert.equal((await disposeSubsidiary(user,acquired.id,exit)).id,d.id);
   assert.equal(d.retained_stake,'20.00');assert.equal(d.parent_gain,'51.66');assert.equal(d.group_gain,'45.00');
   assert.equal(d.closing_statement.balanceCheck,'0.00');
+  assert.equal(d.closing_statement.transferredPayables.length,2);
   const afterExit=await corporateFinanceSnapshot(user.id);
   assert.equal(afterExit.group.subsidiaryCount,0);assert.equal(afterExit.group.goodwill,'0.00');assert.equal(afterExit.group.balanceCheck,'0.00');
   assert.equal(Number(afterExit.group.cash),Number(beforeExit.group.cash)+120);
   const retained=afterExit.holdings.find(x=>x.id===acquired.id);assert.equal(retained.target_company_id,null);assert.equal(retained.ownership_percentage,'20.00');assert.equal(retained.carrying_amount,'90.00');
   assert.equal(afterExit.disposals[0].id,d.id);
   const [archive]=await sql('SELECT disposed_at,cash FROM companies WHERE id=$1',[completed.target_company_id]);assert.ok(archive.disposed_at);assert.equal(archive.cash,'80.00');
-  await assert.rejects(()=>payAcquisitionPayable(user,al.id,{...payable,amount:'10',operationKey:uid()}),/disposed/);
+  await assert.rejects(()=>payAcquisitionPayable(user,al.id,{...paymentA,amount:'1',operationKey:uid()}),/disposed/);
+  assert.equal((await payAcquisitionPayable(user,al.id,paymentA)).id,receiptA.id);
   await assert.rejects(()=>sql("UPDATE companies SET cash=0 WHERE id=$1",[completed.target_company_id]),/read-only/);
   await assert.rejects(()=>sql("INSERT INTO economy_journal(id,user_id,company_id,operation_key,kind,debit,credit,amount,description,actor) VALUES($1,$2,$3,$4,'sale','cash','revenue',1,'unauthorized','fixture')",[uid(),user.id,completed.target_company_id,uid()]),/disposed/);
   await advanceEconomy(user.id);
