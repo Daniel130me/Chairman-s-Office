@@ -24,7 +24,9 @@ import {securitySnapshot} from '../../lib/security.mjs';
 import {securityIntelligenceSnapshot} from '../../lib/security-world.mjs';
 import {grantImpactSnapshot,grantsSnapshot} from '../../lib/philanthropy.mjs';
 import {realWorldNewsSnapshot} from '../../lib/real-world-news.mjs';
-import {buildMeetingPrompt} from '../../lib/meeting-rules.mjs';
+import {realWorldSignalSnapshot} from '../../lib/real-world-signals.mjs';
+import {terminalRound,selectParticipants,appendMeetingResponse,finishMeetingRound,claimMeetingWorker,renewMeetingWorker} from '../../lib/meeting-session.mjs';
+import {buildMeetingPrompt,parseMeetingReply} from '../../lib/meeting-rules.mjs';
 import {characterContext,characterIntelligenceSnapshot,queueCharacterMemory,enqueueCharacterMemory} from '../../lib/character-intelligence.mjs';
 const internal=[['Amara Okafor','Chief of Staff','Measured, perceptive and fiercely discreet','Protect the Chairman’s time and long-term reputation'],['Daniel Mercer','Group CFO','Precise, skeptical and analytically rigorous','Preserve liquidity and challenge weak forecasts'],['Nadia Mensah','Chief Operating Officer','Pragmatic, decisive and direct','Keep subsidiaries performing and execution realistic'],['Julian Hart','General Counsel','Calm, exacting and cautious','Prevent reputational and contractual exposure'],['Sophia Vale','Group Strategy Director','Creative, ambitious and competitive','Pursue defensible expansion opportunities'],['Marcus Reid','Board Chair','Independent and challenging','Ensure accountability and shareholder discipline'],['Grace Okafor','Group Human Resources Director','Empathetic, observant and firm','Build a capable workforce and protect fair employment practices'],['Maya Okoye','Chief Security Officer','Alert, disciplined and discreet','Protect people, information and company assets'],['Rafael Chen','Internal Audit Director','Methodical, independent and evidence-led','Identify control weaknesses and investigate irregularities'],['Tunde Adebayo','Chief Commercial Officer','Persuasive, commercially minded and competitive','Grow customer relationships and improve deal quality']];
 const external=[['Aisha Rahman','Managing Partner','Meridian Capital','investor','Sharp and guarded','Earn favorable terms and obtain influence'],['Victor Sloane','CEO','Sloane Meridian Group','rival','Assertive and calculating','Outcompete the Chairman in key sectors'],['Elena Moretti','Founder','Moretti Ventures','friend','Warm but candid','Find joint ventures without sacrificing independence'],['Kwame Bediako','Regional Director','Atlas Infrastructure','partner','Dependable and cautious','Win strategic delivery contracts'],['Isabelle Laurent','Market Analyst','Independent Advisory','adviser','Thoughtful and sometimes contrarian','Help the Chairman see hidden risks'],['Farah Nasser','Managing Director','Sterling Procurement','vendor','Persuasive and opportunistic','Win competitive bids with profitable terms'],['David Okoro','Chief Executive','Northstar Consumer Group','client','Direct and commercially demanding','Secure reliable supply and favorable service levels'],['Priya Nair','Private Banker','Crown Meridian Bank','banker','Discreet and risk-conscious','Grow lending and wealth-management relationships'],['Ruth Mensah','Commissioner','West African Trade Authority','regulator','Formal and evidence-driven','Ensure compliance and protect public confidence'],['Daniel Brooks','Investigations Editor','The Continental Ledger','journalist','Persistent and skeptical','Publish stories that withstand scrutiny'],['Omar Haddad','Founder and CEO','Helix Industrial Systems','competitor','Ambitious and highly competitive','Win market share and recruit scarce talent'],['Grace Osei','Managing Director','Osei Global Supply','supplier','Practical and price-sensitive','Secure long-term procurement contracts'],['Samuel Dube','Chairman','Dube Ventures','friend','Sociable but strategically cautious','Build trusted business relationships'],['Alex Chen','General Partner','Summit Frontier Partners','investor','Analytical and impatient','Find high-growth investments with governance discipline']];
@@ -70,7 +72,7 @@ for(let i=0;i<external.length;i++){
 }
 for(let i=0;i<scenarios.length;i++){const [title,summary,category,priority]=scenarios[i],id=uid(),actor=contacts[(i+1)%contacts.length];await q('INSERT INTO threads(id,user_id,world_id,company_id,contact_id,title,category,summary,priority) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[id,user.id,wid,companies[i%companies.length].id,actor.id,title,category,summary,priority]);await q('INSERT INTO events(id,user_id,world_id,thread_id,contact_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[uid(),user.id,wid,id,actor.id,'briefing',title,summary]);}
 const greeting=`Good morning, ${user.name}. Your office is established. Your leadership team is waiting, and the first matters are on your desk. I would like to brief you personally before the day begins.`;await q('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,wid,contacts[0].id,'incoming','chat',greeting]);await q('INSERT INTO invites(id,user_id,world_id,contact_id,kind,subject,preview,due_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval \'20 seconds\')',[uid(),user.id,wid,contacts[0].id,'welcome',`Incoming call · ${chief}`,'Your chief of staff would like to welcome you personally.']);await q('INSERT INTO documents(id,user_id,world_id,title,kind,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,wid,'Chairman’s First Executive Brief','briefing',`CONFIDENTIAL — CHAIRMAN’S OFFICE\n\nGroup: ${name}\nHeadquarters: ${region}\nPortfolio: ${sectors.join(', ')}\n\nFirst priorities:\n• Meet the leadership team\n• Review treasury and growth strategy\n• Establish board reporting cadence\n• Evaluate the acquisition proposal`]);const tid=uid();await q('INSERT INTO tenders(id,user_id,world_id,title,budget) VALUES($1,$2,$3,$4,$5)',[tid,user.id,wid,'Regional technology modernization programme',24000000]);for(const [j,c] of contacts.slice(-3).entries())await q('INSERT INTO bids(id,user_id,tender_id,contact_id,amount,weeks,quality,risk) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[uid(),user.id,tid,c.id,22000000+j*1700000,14+j*4,86-j*7,j?'moderate':'low']);return {id:wid,name,region,timezone,sectors,chief,style};});}
-export async function state(userId){const world=await one('SELECT * FROM worlds WHERE user_id=$1',[userId]);if(!world)return null;const tables=['companies','contacts','threads','events','messages','meetings','meeting_turns','documents','decisions','invites','calls','tenders','bids'];const outputs=await Promise.all(tables.map(t=>sql(`SELECT * FROM ${t} WHERE user_id=$1 ORDER BY ${t==='calls'?'started_at':'created_at'} DESC LIMIT 400`,[userId])));const data=Object.fromEntries(tables.map((t,i)=>[t,outputs[i]]));data.meetings=data.meetings.map(m=>({...m,attendees:m.attendees||[]}));data.tenders=data.tenders.map(t=>({...t,bids:data.bids.filter(b=>b.tender_id===t.id)}));data.settings=await one('SELECT * FROM settings WHERE user_id=$1',[userId]);const economy=await economySnapshot(userId);data.companies=economy.companies;const employees=await employmentSnapshot(userId);const hrCases=await hrSnapshot(userId);const governance=await boardSnapshot(userId);const stakeholderEngagements=await stakeholderSnapshot(userId);const relationshipOutcomes=await relationshipSnapshot(userId);const supplierNegotiations=await supplierSnapshot(userId);const operations=await operationsSnapshot(userId);const communications=await communicationSnapshot(userId);const market=await marketSnapshot(userId);const actionRequests=await actionRequestsSnapshot(userId);const wealth=await personalWealthSnapshot(userId);const travel=await travelSnapshot(userId);const security=await securitySnapshot(userId);const securityIntelligence=await securityIntelligenceSnapshot(userId);const intelligence=await characterIntelligenceSnapshot(userId);const grants=await grantsSnapshot(userId);const grantImpact=await grantImpactSnapshot(userId);const realWorldNews=await realWorldNewsSnapshot(userId);return {world,...data,economy,employees,hrCases,...governance,stakeholderEngagements,relationshipOutcomes,supplierNegotiations,operations,...communications,...market,actionRequests,...wealth,...travel,...security,...securityIntelligence,...intelligence,grants,grantImpact,realWorldNews};}
+export async function state(userId){const world=await one('SELECT * FROM worlds WHERE user_id=$1',[userId]);if(!world)return null;const tables=['companies','contacts','threads','events','messages','meetings','meeting_turns','documents','decisions','invites','calls','tenders','bids'];const outputs=await Promise.all(tables.map(t=>sql(`SELECT * FROM ${t} WHERE user_id=$1 ORDER BY ${t==='calls'?'started_at':'created_at'} DESC LIMIT 400`,[userId])));const data=Object.fromEntries(tables.map((t,i)=>[t,outputs[i]]));data.meetings=data.meetings.map(m=>({...m,attendees:m.attendees||[]}));data.tenders=data.tenders.map(t=>({...t,bids:data.bids.filter(b=>b.tender_id===t.id)}));data.settings=await one('SELECT * FROM settings WHERE user_id=$1',[userId]);const economy=await economySnapshot(userId);data.companies=economy.companies;const employees=await employmentSnapshot(userId);const hrCases=await hrSnapshot(userId);const governance=await boardSnapshot(userId);const stakeholderEngagements=await stakeholderSnapshot(userId);const relationshipOutcomes=await relationshipSnapshot(userId);const supplierNegotiations=await supplierSnapshot(userId);const operations=await operationsSnapshot(userId);const communications=await communicationSnapshot(userId);const market=await marketSnapshot(userId);const actionRequests=await actionRequestsSnapshot(userId);const wealth=await personalWealthSnapshot(userId);const travel=await travelSnapshot(userId);const security=await securitySnapshot(userId);const securityIntelligence=await securityIntelligenceSnapshot(userId);const intelligence=await characterIntelligenceSnapshot(userId);const grants=await grantsSnapshot(userId);const grantImpact=await grantImpactSnapshot(userId);const realWorldNews=await realWorldNewsSnapshot(userId);const realWorldSignals=await realWorldSignalSnapshot(userId);return {world,...data,economy,employees,hrCases,...governance,stakeholderEngagements,relationshipOutcomes,supplierNegotiations,operations,...communications,...market,actionRequests,...wealth,...travel,...security,...securityIntelligence,...intelligence,grants,grantImpact,realWorldNews,realWorldSignals};}
 async function characterPrompt(user,contact,history,world){
   const economy=contact.kind==='internal'&&['Group CFO','Chief Operating Officer','Chief of Staff'].includes(contact.title)?await economySnapshot(user.id):null;
   const assigned=await sql("SELECT title,detail,status,outcome FROM business_tasks WHERE user_id=$1 AND assignee_id=$2 ORDER BY created_at DESC LIMIT 10",[user.id,contact.id]);
@@ -97,7 +99,7 @@ async function characterPrompt(user,contact,history,world){
 async function classifyBusinessAction(user,contact,body,operationKeyValue){
  if(contact.kind!=='internal'||!/\b(hire|recruit|fire|terminate|dismiss|expense|spend|pay|approve|contract|assign|delegate|investigation|investigate)\b/i.test(body))return null;
  const [companies,employees,contracts,executives]=await Promise.all([
-  sql('SELECT id,name,sector FROM companies WHERE user_id=$1',[user.id]),
+  sql('SELECT id,name,sector FROM companies WHERE user_id=$1 AND disposed_at IS NULL',[user.id]),
   sql("SELECT e.id,p.name,e.job_title,e.status FROM employment_records e JOIN contacts p ON p.id=e.contact_id AND p.user_id=e.user_id WHERE e.user_id=$1 AND e.status='active'",[user.id]),
   sql("SELECT id,title,counterparty,status,value FROM business_contracts WHERE user_id=$1 AND status='draft'",[user.id]),
   sql("SELECT id,name,title,company FROM contacts WHERE user_id=$1 AND kind='internal'",[user.id])
@@ -240,73 +242,100 @@ export async function createMeeting(user,data){
   return meeting;
  });
 }
-export async function meetingSpeak(user,meetingId,text){
+export async function meetingSpeak(user,meetingId,text,options={}){
  const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);if(!w)throw Error('Empire unavailable');
  const m=await one('SELECT * FROM meetings WHERE id=$1 AND user_id=$2',[meetingId,user.id]);if(!m||m.status==='concluded')throw Error('Meeting unavailable');
- const contacts=await sql('SELECT id FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],id)',[user.id,m.attendees]);
+ const contacts=selectParticipants(await sql('SELECT id FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],id)',[user.id,m.attendees]),options.contactId);
  if(!contacts.length)throw Error('No participants');
  text=String(text||'What are your assessments of the situation?').trim().slice(0,3000);
  return transaction(async q=>{
   const locked=(await q('SELECT id,status FROM meetings WHERE id=$1 AND user_id=$2 FOR UPDATE',[meetingId,user.id]))[0];
   if(!locked||locked.status==='concluded')throw Error('Meeting unavailable');
+  if(options.requestId){const [prior]=await q('SELECT r.*,t.message FROM meeting_rounds r JOIN meeting_turns t ON t.id=r.chairman_turn_id AND t.user_id=r.user_id WHERE r.user_id=$1 AND r.meeting_id=$2 AND r.client_request_id=$3',[user.id,meetingId,options.requestId]);if(prior){if(prior.source_round_id||prior.message!==text||prior.requested_contact_id!==(options.contactId||null))throw Error('Request reference already used.');return {roundId:prior.id,expectedResponses:prior.expected_responses,status:prior.status,replayed:true};}}
   const active=(await q("SELECT id FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 AND status IN ('pending','running') FOR UPDATE",[meetingId,user.id]))[0];
-  if(active)throw Error('The board is still discussing the previous round. Wait for it to finish before speaking again.');
+  if(active&&!options.interrupt)throw Error('The board is still discussing the previous round. Interrupt to take the floor.');
+  if(active)await q("UPDATE meeting_rounds SET status='interrupted',interrupted_at=now(),completed_at=now(),worker_token=NULL,worker_lease_until=NULL WHERE id=$1 AND user_id=$2",[active.id,user.id]);
   const chairmanTurn=(await q('INSERT INTO meeting_turns(id,user_id,meeting_id,speaker,message) VALUES($1,$2,$3,$4,$5) RETURNING *',[uid(),user.id,m.id,user.name,text]))[0];
   await q("UPDATE meetings SET status='in_progress' WHERE id=$1 AND user_id=$2",[m.id,user.id]);
-  const round=(await q('INSERT INTO meeting_rounds(id,user_id,world_id,meeting_id,chairman_turn_id,expected_responses) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[uid(),user.id,w.id,m.id,chairmanTurn.id,contacts.length]))[0];
+  const round=(await q('INSERT INTO meeting_rounds(id,user_id,world_id,meeting_id,chairman_turn_id,expected_responses,client_request_id,requested_contact_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[uid(),user.id,w.id,m.id,chairmanTurn.id,contacts.length,options.requestId||null,options.contactId||null]))[0];
   await q('UPDATE meeting_turns SET round_id=$1 WHERE id=$2 AND user_id=$3',[round.id,chairmanTurn.id,user.id]);
+  if(active){await q('UPDATE meeting_rounds SET interrupted_by=$1 WHERE id=$2 AND user_id=$3',[round.id,active.id,user.id]);await q('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,w.id,'meeting-interrupted',m.title,'Chairman redirected the discussion; saved responses retained.']);}
   return {roundId:round.id,chairmanTurn,expectedResponses:round.expected_responses,status:round.status};
+ });
+}
+export async function continueBoardDebate(user,meetingId,sourceRoundId){
+ return transaction(async q=>{
+  const [m]=await q('SELECT * FROM meetings WHERE id=$1 AND user_id=$2 FOR UPDATE',[meetingId,user.id]);
+  if(!m||m.status==='concluded')throw Error('Meeting unavailable');
+  const [source]=await q('SELECT * FROM meeting_rounds WHERE id=$1 AND meeting_id=$2 AND user_id=$3',[sourceRoundId,meetingId,user.id]);
+  if(!source)throw Error('Meeting round unavailable');
+  const [prior]=await q('SELECT * FROM meeting_rounds WHERE source_round_id=$1 AND user_id=$2 AND meeting_id=$3',[source.id,user.id,m.id]);
+  if(prior)return {roundId:prior.id,status:prior.status,expectedResponses:prior.expected_responses,replayed:true};
+  const [latest]=await q('SELECT id FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at DESC,id DESC LIMIT 1',[m.id,user.id]);
+  if(latest?.id!==source.id||source.status!=='completed'||source.debate_depth>=2)throw Error('Only the latest completed discussion can continue, up to two follow-up rounds.');
+  const people=await q('SELECT id FROM contacts WHERE user_id=$1 AND world_id=$2 AND id=ANY($3::uuid[])',[user.id,m.world_id,m.attendees]);
+  if(people.length<2)throw Error('At least two executives are required to continue debate.');
+  const [round]=await q('INSERT INTO meeting_rounds(id,user_id,world_id,meeting_id,chairman_turn_id,expected_responses,source_round_id,debate_depth) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[uid(),user.id,m.world_id,m.id,source.chairman_turn_id,people.length,source.id,source.debate_depth+1]);
+  await q('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,m.world_id,'meeting-discussion',m.title,'Executives were invited to continue the debate without a new Chairman statement.']);
+  return {roundId:round.id,status:round.status,expectedResponses:round.expected_responses};
  });
 }
 export async function runMeetingRound(roundId,userId){
  const round=await one('SELECT * FROM meeting_rounds WHERE id=$1 AND user_id=$2',[roundId,userId]);
- if(!round||['completed','partial','failed'].includes(round.status))return round;
- await sql("UPDATE meeting_rounds SET status='running',started_at=coalesce(started_at,now()) WHERE id=$1 AND user_id=$2",[roundId,userId]);
+ if(!round||terminalRound(round.status))return round;
+ const claimed=await claimMeetingWorker(userId,roundId);if(!claimed)return;const workerToken=claimed.worker_token;
  try{
   const m=await one('SELECT * FROM meetings WHERE id=$1 AND user_id=$2',[round.meeting_id,userId]);
   const w=await one('SELECT * FROM worlds WHERE id=$1 AND user_id=$2',[round.world_id,userId]);
   const user=await one('SELECT id,name FROM users WHERE id=$1',[userId]);
   if(!m||!w||!user)throw Error('Meeting context unavailable');
-  const contacts=await sql('SELECT * FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],id)',[userId,m.attendees]);
-  const prior=await sql('SELECT speaker,message FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND created_at<=(SELECT created_at FROM meeting_turns WHERE id=$3 AND user_id=$2) ORDER BY created_at DESC LIMIT 24',[m.id,userId,round.chairman_turn_id]);
+  const allContacts=await sql('SELECT * FROM contacts WHERE user_id=$1 AND id=ANY($2::uuid[]) ORDER BY array_position($2::uuid[],id)',[userId,m.attendees]);
+  const contacts=selectParticipants(allContacts,round.requested_contact_id);
+  if(round.debate_depth%2===1)contacts.reverse();
+  const prior=round.source_round_id?await sql('SELECT speaker,message FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND created_at<=$3 AND round_id IS DISTINCT FROM $4 ORDER BY created_at DESC,id DESC LIMIT 24',[m.id,userId,round.created_at,round.id]):await sql('SELECT speaker,message FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 AND created_at<=(SELECT created_at FROM meeting_turns WHERE id=$3 AND user_id=$2) ORDER BY created_at DESC,id DESC LIMIT 24',[m.id,userId,round.chairman_turn_id]);
   const history=prior.reverse();
-  const existing=await sql('SELECT contact_id FROM meeting_turns WHERE round_id=$1 AND user_id=$2 AND contact_id IS NOT NULL',[roundId,userId]);
+  const existing=await sql('SELECT contact_id,speaker,message FROM meeting_turns WHERE round_id=$1 AND user_id=$2 AND contact_id IS NOT NULL ORDER BY created_at,id',[roundId,userId]);
+  history.push(...existing.map(x=>({speaker:x.speaker,message:x.message})));
   const completed=new Set(existing.map(x=>x.contact_id));
   let saved=existing.length;
   for(const person of contacts){
    if(completed.has(person.id))continue;
+   if(!await renewMeetingWorker(userId,roundId,workerToken))return {id:roundId,status:'superseded'};
    try{
     const context=await characterPrompt(user,person,history.map(turn=>({direction:turn.speaker,body:turn.message})),w);
-    const prompt=buildMeetingPrompt({meetingTitle:m.title,empireName:w.name,person,attendees:contacts,history});
-    const reply=await ask(context+' You are a distinct fictional executive in a private board meeting. Be candid, realistic and evidence-led. Do not invent financial facts or completed actions.',prompt,{fallback:null});
-    if(!reply||typeof reply!=='string'||!reply.trim())continue;
-    const message=reply.trim().slice(0,1800);
-    const inserted=await one('INSERT INTO meeting_turns(id,user_id,meeting_id,contact_id,speaker,message,round_id) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(round_id,contact_id) WHERE round_id IS NOT NULL AND contact_id IS NOT NULL DO NOTHING RETURNING id',[uid(),userId,m.id,person.id,person.name,message,roundId]);
-    if(!inserted){const priorTurn=await one('SELECT speaker,message FROM meeting_turns WHERE round_id=$1 AND contact_id=$2',[roundId,person.id]);if(priorTurn){history.push(priorTurn);saved++;completed.add(person.id);}continue;}
-    history.push({speaker:person.name,message});saved++;completed.add(person.id);
-    await sql('UPDATE meeting_rounds SET responses_saved=$1 WHERE id=$2 AND user_id=$3',[saved,roundId,userId]);
+    const allowInterjection=saved>0&&contacts.length>1&&!round.requested_contact_id;
+    const prompt=buildMeetingPrompt({meetingTitle:m.title,empireName:w.name,person,attendees:allContacts,history,followUp:!!round.source_round_id,allowInterjection});
+    const reply=await ask(context+' You are a distinct fictional executive in a private board meeting. Be candid, realistic and evidence-led. Keep spoken replies conversational and concise, normally two or three short sentences. Do not invent financial facts or completed actions.',prompt,{fallback:null});
+    const parsed=parseMeetingReply(reply,{allowInterjection});if(!parsed)continue;
+    const result=await appendMeetingResponse(userId,m.id,roundId,person,parsed.message,workerToken,parsed.deliveryStyle);
+    if(result.stopped)return {id:roundId,status:'interrupted'};
+    if(result.turn){history.push({speaker:result.turn.speaker,message:result.turn.message});saved=result.saved;completed.add(person.id);}
+
    }catch(error){console.warn('Board participant response unavailable',person.id,error.name||'error');}
   }
-  const status=saved>=contacts.length?'completed':'partial';
-  await sql('UPDATE meeting_rounds SET status=$1,responses_saved=$2,completed_at=now(),error=NULL WHERE id=$3 AND user_id=$4',[status,saved,roundId,userId]);
-  await sql('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),userId,w.id,'meeting-discussion',m.title,user.name+' addressed the meeting; '+saved+' of '+contacts.length+' executives responded in sequence.']);
-  return {id:roundId,status,responses_saved:saved,expected_responses:contacts.length};
+  const finished=await finishMeetingRound(userId,m.id,roundId,null,workerToken);
+  if(!finished)return {id:roundId,status:'interrupted'};
+  await sql('INSERT INTO events(id,user_id,world_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),userId,w.id,'meeting-discussion',m.title,(round.source_round_id?'Executive follow-up debate; ':user.name+' addressed the meeting; ')+finished.responses_saved+' of '+finished.expected_responses+' executives responded.']);
+  return finished;
  }catch(error){
-  await sql("UPDATE meeting_rounds SET status='failed',error=$1,completed_at=now() WHERE id=$2 AND user_id=$3",[String(error.message||'Meeting workflow failed').slice(0,500),roundId,userId]);
+  await finishMeetingRound(userId,round.meeting_id,roundId,String(error.message||'Meeting workflow failed').slice(0,500),workerToken);
   throw error;
  }
 }
 export async function meetingRounds(user,meetingId){
- return sql('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 5',[meetingId,user.id]);
+ return sql('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at,requested_contact_id,interrupted_at,worker_attempts,source_round_id,debate_depth FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 5',[meetingId,user.id]);
 }
 export async function meetingRoundStatus(user,meetingId,roundId){
- return one('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at FROM meeting_rounds WHERE id=$1 AND meeting_id=$2 AND user_id=$3',[roundId,meetingId,user.id]);
+ return one('SELECT id,status,expected_responses,responses_saved,error,created_at,started_at,completed_at,requested_contact_id,interrupted_at,worker_attempts,source_round_id,debate_depth FROM meeting_rounds WHERE id=$1 AND meeting_id=$2 AND user_id=$3',[roundId,meetingId,user.id]);
 }
 export async function endMeeting(user,id){
  const m=await one('SELECT * FROM meetings WHERE id=$1 AND user_id=$2',[id,user.id]);if(!m)throw Error('Meeting unavailable');if(m.status==='concluded')return {minutes:m.minutes};
- const turns=await sql('SELECT speaker,message,contact_id FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at',[id,user.id]);
+ if(await one("SELECT id FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 AND status IN ('pending','running')",[id,user.id]))throw Error('Interrupt or finish the current discussion before concluding.');
+ const turns=await sql('SELECT id,speaker,message,contact_id FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2 ORDER BY created_at',[id,user.id]);
  const minutes=await ask('Write sober professional meeting minutes based strictly on these fictional discussion turns. Include agenda, divergent views, decisions (only if made), unresolved matters and follow-ups.',JSON.stringify({title:m.title,turns}),{fallback:m.title+'\n\n'+turns.map(x=>x.speaker+': '+x.message).join('\n\n')});
  return transaction(async q=>{
+  const [locked]=await q('SELECT status FROM meetings WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,user.id]);if(!locked)throw Error('Meeting unavailable');
+  if(locked.status!=='concluded'){const [count]=await q('SELECT count(*)::int n FROM meeting_turns WHERE meeting_id=$1 AND user_id=$2',[id,user.id]);const [activeRound]=await q("SELECT id FROM meeting_rounds WHERE meeting_id=$1 AND user_id=$2 AND status IN ('pending','running')",[id,user.id]);if(activeRound||count.n!==turns.length)throw Error('Discussion changed; conclude again using the latest transcript.');}
   const rows=await q("UPDATE meetings SET minutes=$1,status='concluded' WHERE id=$2 AND user_id=$3 AND status<>'concluded' RETURNING minutes",[minutes,id,user.id]);
   if(!rows.length)return {minutes:(await q('SELECT minutes FROM meetings WHERE id=$1 AND user_id=$2',[id,user.id]))[0].minutes};
   await q('INSERT INTO documents(id,user_id,world_id,title,kind,body) VALUES($1,$2,$3,$4,$5,$6)',[uid(),user.id,m.world_id,'Minutes — '+m.title,'board minutes',minutes]);

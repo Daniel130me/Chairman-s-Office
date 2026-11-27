@@ -1,4 +1,35 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#10152a"><title>Chairman's Office · Offline</title><style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#10152a;color:#f8fafc;font:16px system-ui,-apple-system,sans-serif;padding:24px}.card{max-width:440px;text-align:center;padding:36px 28px;border:1px solid #334155;border-radius:24px;background:#172033;box-shadow:0 24px 80px #0005}.mark{width:64px;height:64px;border-radius:20px;background:#24456b;display:grid;place-items:center;margin:0 auto 20px;font-size:28px}.muted{color:#a9b8ce;line-height:1.6}button{margin-top:18px;padding:12px 22px;border:0;border-radius:12px;background:#d7e6ff;color:#142238;font-weight:700;font-size:15px}
-</style></head><body><main class="card"><div class="mark">♛</div><h1>Chairman's Office</h1><p class="muted">Your office is temporarily offline. Your private business records have not been cached on this device. Reconnect to continue conversations, receive calls and access the live world.</p><button onclick="location.reload()">Try again</button></main></body></html>
+</style></head><body><main class="card"><div class="mark">♛</div><h1>Chairman's Office</h1><p class="muted">Your office is temporarily unreachable. Private business records are not stored in this offline page. Your fictional world may continue on the server. Reconnect to see the latest activity.</p><button onclick="retry()">Try again</button><p id="connection" class="muted" role="status">Waiting for a connection.</p></main><script>
+const status=document.getElementById('connection');let reconnecting=false,generation=0,activeProbe=null;
+function check(){status.textContent=navigator.onLine?'Network available. Checking your office connection…':'No network connection.';}
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function retry(){
+ if(reconnecting)return;reconnecting=true;const run=++generation;check();
+ for(let attempt=0;attempt<12;attempt++){
+  if(run!==generation)return;
+  if(!navigator.onLine){reconnecting=false;check();return;}
+  try{
+   // This URL is deliberately not part of the public cache allow-list: it must reach
+   // the application server rather than succeeding from a stale offline shell.
+   const probe=new URL('/',location.origin);probe.searchParams.set('offline-probe',String(Date.now()));
+   const controller=new AbortController();activeProbe=controller;const timeout=setTimeout(()=>controller.abort(),4000);let response;
+   try{response=await fetch(probe.href,{cache:'no-store',credentials:'same-origin',headers:{'X-CO-Reconnect-Probe':'1'},signal:controller.signal});}finally{clearTimeout(timeout);if(activeProbe===controller)activeProbe=null;}
+   if(run!==generation||!navigator.onLine)return;
+   if(response.ok){
+    const current=new URL(location.href);
+    if(current.pathname==='/offline.html')current.pathname='/';
+    current.searchParams.delete('offline-probe');
+    location.replace(current.href);return;
+   }
+  }catch{}
+  await delay(500);
+ }
+ if(run!==generation)return;
+ reconnecting=false;status.textContent='Network is available, but your office server is still unreachable. Try again shortly.';
+}
+window.addEventListener('online',()=>{check();void retry();});
+window.addEventListener('offline',()=>{generation++;activeProbe?.abort();activeProbe=null;reconnecting=false;check();});
+check();
+</script></body></html>

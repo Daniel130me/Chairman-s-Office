@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {nextConversationParticipant} from '../lib/world-conversation-rules.mjs';
+const people=[{contact_id:'a',name:'Amara'},{contact_id:'b',name:'CFO'},{contact_id:'c',name:'Legal'}];
+test('first group response starts with the first participant',()=>{assert.equal(nextConversationParticipant(people,[{sender_contact_id:null}]),people[0]);});
+test('group responses rotate after the most recent character, ignoring Chairman messages',()=>{assert.equal(nextConversationParticipant(people,[{sender_contact_id:'a'},{sender_contact_id:null}]),people[1]);assert.equal(nextConversationParticipant(people,[{sender_contact_id:'a'},{sender_contact_id:'b'},{sender_contact_id:null}]),people[2]);});
+test('group response order wraps and supports one participant',()=>{assert.equal(nextConversationParticipant(people,[{sender_contact_id:'c'},{sender_contact_id:null}]),people[0]);assert.equal(nextConversationParticipant([people[0]],[{sender_contact_id:'a'}]),people[0]);});
+test('invalid or removed participants do not break speaker selection',()=>{assert.equal(nextConversationParticipant([],[]),null);assert.equal(nextConversationParticipant(people,[{sender_contact_id:'removed'},{sender_contact_id:null}]),people[0]);});

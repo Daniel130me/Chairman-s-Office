@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {monthlyCharge} from '../lib/intangible-schedules.mjs';
+test('monthly amortization rounds to cents and never exceeds remaining value',()=>{assert.equal(monthlyCharge('10.00',3),'3.34');assert.equal(monthlyCharge('0.01',3),'0.01');assert.equal(monthlyCharge('6.66',2),'3.33');assert.throws(()=>monthlyCharge('1',0));assert.throws(()=>monthlyCharge('-1',2));});
