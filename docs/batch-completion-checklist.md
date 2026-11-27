@@ -19,7 +19,9 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Control-retaining partial subsidiary stake sale with ownership updates, goodwill preservation and group equity reclassification implemented.
 - [x] Documented identifiable intangible assets, assumed trade payable for a named creditor, and evidence-backed payable settlement; acquisition net assets and goodwill extended accordingly.
 - [x] Loss-of-control disposal for a direct standalone subsidiary: complete exit or retained minority interest, closing financial statement, modeled disposal-date group gain/loss, archive protection and active operations filters.
-- [ ] Complex disposal of nested subsidiaries or unresolved obligations, complete historical consolidated reporting including sold-company earnings up to sale, other assumed debt, multiple creditors, negative net assets, bargain purchases and intangible amortization/impairment; richer ownership/covenant mechanisms.
+- [x] Disposal of nested controlled groups and of a subsidiary owned by another subsidiary; consolidated closing statements, group gain/loss and NCI/goodwill treatment, internal intercompany elimination and historical cumulative earnings through the disposal date.
+- [x] Buyer assumption of multiple disbursed loan facilities and acquired trade payables; accrued interest through disposal, creditor-by-creditor evidence, preserved loan/payment history and seller-side servicing fences.
+- [ ] Multiple trade creditors within a single acquisition allocation (currently one payable creditor per allocation); transfer of external intercompany facilities, contracts, purchase orders, employees and other unresolved operating obligations (currently blocked safely); period-by-period consolidated history; negative net assets/bargain purchases; intangible amortization/impairment; richer ownership/covenant mechanisms.
 - [ ] Final merge and live ledger reconciliation.
 
 ## Batch 3 — Business Operations
@@ -63,7 +65,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] GitHub Actions run 45947711299 passed for control-retaining sales and installment settlements.
 - [x] GitHub Actions run 45948300427 passed for settlement renegotiation, acquired intangibles and assumed creditor balances.
 - [x] GitHub Actions run 45950465110 passed corrected disposal migrations, corporate finance, advanced operations, executive experience database tests and production build, including interruptible meeting implementation.
-- [ ] Verify current worker recovery, audio prefetch and opt-in WebRTC microphone changes; live provider/device acceptance still required.
+- [x] Automated regression coverage for meeting worker leases/recovery, audio prefetch and opt-in WebRTC microphone/ICE handling.
+- [ ] Verify live transcription provider connectivity, low-latency continuous speech-to-speech output, overlapping speech and real-device echo/latency. Executive synthesis remains segmented; see `meeting-voice-acceptance.md`.
 - [ ] Run all automated tests, verify Neon migrations and deployment, reconcile financial state.
 - [ ] Test inbound/outbound calls, callbacks, missed/declined calls, voicemail, voice notes, cross-channel memory and boardroom outcomes.
 - [ ] Test autonomous offline progression (including multi-day absence and duplicate prevention), activity history and every phone app.
