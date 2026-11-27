@@ -19,6 +19,7 @@ function AppHeader({title,back,action,subtitle}){return <div className="app-head
 function Primary({children,onClick,disabled=false,secondary=false}){return <button className={'primary-btn '+(secondary?'secondary':'')} disabled={disabled} onClick={onClick}>{children}</button>}
 function App({}){
 const [user,setUser]=useState(null),[world,setWorld]=useState(null),[loading,setLoading]=useState(true),[page,setPage]=useState('home'),[stack,setStack]=useState([]),[locked,setLocked]=useState(false),[shade,setShade]=useState(false),[drawer,setDrawer]=useState(false),[detail,setDetail]=useState(null),[toast,setToast]=useState(''),[clock,setClock]=useState(new Date()),[incoming,setIncoming]=useState(null),[ringing,setRinging]=useState(false),[call,setCall]=useState(null),[transcript,setTranscript]=useState([]),[muted,setMuted]=useState(false),[speaker,setSpeaker]=useState(true),[targetEventId,setTargetEventId]=useState(null);
+const checkpointRef=useRef({id:null,saved:0,task:null});
 const vapiRef=useRef(null),transcriptRef=useRef([]),callRef=useRef(null),dialingRef=useRef(false),finishingRef=useRef(false),lastInvite=useRef(null),targetInvite=useRef(null),knownInviteIds=useRef(new Set()),toastTimer=useRef(null);const notify=s=>{setToast(s);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(''),4500)};
 const reload=async()=>{const r=await api('/state');setUser(r.user);setWorld(r.state);return r.state;};
 useEffect(()=>{const url=new URL(window.location.href);targetInvite.current=url.searchParams.get('invite');const eventId=url.searchParams.get('event'),targetApp=url.searchParams.get('app');if(eventId){setTargetEventId(eventId);setPage(targetApp||'activity');}if(targetInvite.current||eventId){url.searchParams.delete('invite');url.searchParams.delete('event');url.searchParams.delete('app');window.history.replaceState(null,'',url.pathname+url.search+url.hash);}if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});},[]);
@@ -54,7 +55,7 @@ async function connect(c,inviteId){
   try{
     const data=await api('/calls/start',{method:'POST',body:{contactId:c.id,inviteId}});
     if(data.unavailable){notify(c.name+' is unavailable. You can leave a message.');go('conversation',{...c,missedCallId:data.call.id});await reload();return;}
-    callRef.current=data.call.id;transcriptRef.current=[];setTranscript([]);
+    callRef.current=data.call.id;checkpointRef.current={id:data.call.id,saved:0,task:null};transcriptRef.current=[];setTranscript([]);
     setCall({...data,contact:c,live:false});setIncoming(null);
     await startVapi(data,c);
   }catch(e){notify(e.message);setIncoming(null);reload().catch(()=>{});}
@@ -161,19 +162,33 @@ async function startVapi(data,c){
   }catch(e){notify('Unable to establish voice connection: '+e.message);await finishVoice(true,'failed');}
 }
 // Keep the transcript in memory until Neon confirms it was saved. Hang up again to retry.
+async function saveCallCheckpoint(id){
+ const checkpoint=checkpointRef.current;if(checkpoint.id!==id)return;
+ if(checkpoint.task)await checkpoint.task;
+ if(checkpointRef.current!==checkpoint||callRef.current!==id)return;
+ const task=(async()=>{const snapshot=transcriptRef.current.slice(0,150).filter(x=>typeof x.text==='string'&&x.text.trim()).map(x=>({role:String(x.role||'speaker').slice(0,30),text:x.text.slice(0,3000)}));do{
+  const offset=checkpoint.saved;
+  const r=await api('/calls/'+id+'/checkpoint',{method:'POST',body:{offset,transcript:snapshot.slice(offset,offset+4)}});
+  if(r.status!=='active')return;
+  if(r.saved<offset||r.saved===offset&&offset<snapshot.length)throw Error('Transcript checkpoint was not accepted');
+  checkpoint.saved=r.saved;
+ }while(checkpoint.saved<snapshot.length);})();
+ checkpoint.task=task;try{await task;}finally{if(checkpoint.task===task)checkpoint.task=null;}
+}
 async function finishVoice(stop,status='completed'){
   if(finishingRef.current||!callRef.current)return;
   finishingRef.current=true;setCall(t=>t?{...t,live:false}:t);
   try{
     if(stop){try{vapiRef.current?.stop();}catch{}}
     vapiRef.current=null;
-    await api('/calls/'+callRef.current+'/end',{method:'POST',body:{transcript:transcriptRef.current,status}});
+    await saveCallCheckpoint(callRef.current);
+    await api('/calls/'+callRef.current+'/end',{method:'POST',body:{transcript:[],status}});
     callRef.current=null;setCall(null);transcriptRef.current=[];setTranscript([]);reload().catch(()=>{});
   }catch(e){notify('Call ended. Tap hang up again to retry saving the transcript.');}
   finally{finishingRef.current=false;}
 }
 async function hangup(){await finishVoice(true);}
-useEffect(()=>{if(!call?.call?.id)return;const id=call.call.id;const save=()=>{if(callRef.current!==id)return;api('/calls/'+id+'/checkpoint',{method:'POST',body:{transcript:transcriptRef.current}}).catch(()=>{});};save();const timer=setInterval(save,15000);window.addEventListener('online',save);return()=>{clearInterval(timer);window.removeEventListener('online',save);};},[call?.call?.id]);
+useEffect(()=>{if(!call?.call?.id)return;const id=call.call.id;const save=()=>{if(callRef.current!==id)return;saveCallCheckpoint(id).catch(()=>{});};save();const timer=setInterval(save,15000);window.addEventListener('online',save);return()=>{clearInterval(timer);window.removeEventListener('online',save);};},[call?.call?.id]);
 const currentContact=contact=>world?.contacts?.find(c=>c.id===contact);
 const pending=world?.invites?.filter(x=>x.status==='pending'&&new Date(x.due_at)<=new Date())||[];
 const chiefName=world?.contacts?.find(x=>x.title==='Chief of Staff')?.name||'Chief of Staff';
