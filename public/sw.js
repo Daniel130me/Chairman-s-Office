@@ -6,13 +6,13 @@ const safeTarget=value=>['activity','phone','messages','calendar','board','finan
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(PUBLIC_SHELL)));});
 self.addEventListener('message',event=>{if(event.data?.type==='ACTIVATE_UPDATE'&&event.source?.url&&new URL(event.source.url).origin===self.location.origin)event.waitUntil(self.skipWaiting());});
 self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE&&k.startsWith('chairmans-office-')).map(k=>caches.delete(k))))]));});
-const offline=async()=>await caches.match('/offline.html',{cacheName:CACHE})||new Response('Chairman’s Office is offline. Reconnect and retry.',{status:503,headers:{'Content-Type':'text/plain'}});
+const offline=async()=>{const cache=await caches.open(CACHE);return await cache.match('/offline.html')||new Response('Your office is temporarily unreachable. Private records are not stored in this offline page. Reconnect to see the latest activity.',{status:503,headers:{'Content-Type':'text/html; charset=utf-8'}});};
 self.addEventListener('fetch',event=>{
  const url=new URL(event.request.url);
  if(event.request.method!=='GET'||url.origin!==self.location.origin)return;
  // Private API, auth, media and HTML are always network-only.
  if(event.request.mode==='navigate'){
-  event.respondWith(fetch(event.request).then(r=>[502,503,504].includes(r.status)?offline():r).catch(offline));return;
+  event.respondWith((async()=>{if(self.navigator.onLine===false)return offline();try{const response=await fetch(event.request);return [502,503,504].includes(response.status)?offline():response;}catch{return offline();}})());return;
  }
  if(!url.pathname.startsWith('/_next/static/')&&!PUBLIC_SHELL.includes(url.pathname))return;
  event.respondWith(caches.open(CACHE).then(async cache=>{const cached=await cache.match(event.request);if(cached)return cached;const response=await fetch(event.request);if(response.ok&&response.type==='basic'&&!/private|no-store/i.test(response.headers.get('Cache-Control')||''))try{await cache.put(event.request,response.clone());}catch{}return response;}).catch(()=>fetch(event.request)));
