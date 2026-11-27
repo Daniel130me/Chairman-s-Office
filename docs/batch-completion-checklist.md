@@ -42,7 +42,9 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Travel concierge briefs, itinerary checks, calendar conflicts, recorded disruptions and resolutions, notification links; no automatic spending.
 - [x] Call transcript checkpoints and abandoned call recovery; per-device push delivery receipts, generic lock-screen alerts and notification diagnostics.
 - [x] Unit tests and isolated database lifecycle tests authored.
-- [ ] Full-duplex low-latency multi-character voice conferencing with natural turn-taking and true conversational interruption (existing implementation is turn-based).
+- [x] Interruptible meeting rounds with atomic stale-response fencing, directed executive questions, idempotent Chairman turns, resumable polling and stable final minutes.
+- [x] Opt-in conversational microphone with local voice activity detection, requested acoustic echo cancellation, utterance-level transcription and playback interruption; microphone stops when hidden or closed.
+- [ ] Verified full-duplex streaming voice, overlapping speech handling, real-device echo/latency testing and provider acceptance. Current hands-free mode remains utterance-based, not continuously streaming.
 - [x] Autonomous fictional travel-provider disruption review, alternative booking proposals with manually recorded quotes, approved replacement bookings and fee workflows implemented on Batch 5.
 - [x] Autonomous concierge replacement quote generation from the recorded fictional provider; bounded price and fees, separate Chairman approval.
 - [ ] Physical Android/iPhone PWA call alert, voice/microphone and notification delivery tests; closed-PWA ringtone is not guaranteed by the web platform.
@@ -57,7 +59,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] GitHub Actions run 45946826729 passed for competitive sourcing, limited allocation and autonomous replacement quotes.
 - [x] GitHub Actions run 45947711299 passed for control-retaining sales and installment settlements.
 - [x] GitHub Actions run 45948300427 passed for settlement renegotiation, acquired intangibles and assumed creditor balances.
-- [ ] Verify latest loss-of-control disposal changes, migration and archive protection tests.
+- [ ] Loss-of-control disposal verification: run 45949328734 passed unit tests but failed SQL migration due to malformed dollar quoting. Fix committed; rerun required.
+- [ ] Verify new interruptible meeting and microphone implementation, including live provider/device acceptance.
 - [ ] Run all automated tests, verify Neon migrations and deployment, reconcile financial state.
 - [ ] Test inbound/outbound calls, callbacks, missed/declined calls, voicemail, voice notes, cross-channel memory and boardroom outcomes.
 - [ ] Test autonomous offline progression (including multi-day absence and duplicate prevention), activity history and every phone app.
