@@ -1,16 +1,35 @@
-const CACHE='chairmans-office-v4';
-self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.add('/offline.html')).catch(()=>{}).then(()=>self.skipWaiting()));});
-self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE&&k.startsWith('chairmans-office')).map(k=>caches.delete(k))))]));});
-// Immutable assets only: do not cache private responses, HTML or reset links.
+const CACHE='chairmans-office-v5';
+const PUBLIC_SHELL=['/offline.html','/icon-192.png','/icon-512.png','/apple-touch-icon.png','/manifest.webmanifest'];
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const safeId=value=>typeof value==='string'&&UUID.test(value)?value:null;
+const safeTarget=value=>['activity','phone','messages','calendar','board','finance','documents','deals','intelligence','news','employees','operations','investigations','approvals','security','family','travel','giving','inventory','loans','acquisitions','mail','contacts','companies','assistant','settings'].includes(value)?value:'activity';
+self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(PUBLIC_SHELL)));});
+self.addEventListener('message',event=>{if(event.data?.type==='ACTIVATE_UPDATE'&&event.source?.url&&new URL(event.source.url).origin===self.location.origin)event.waitUntil(self.skipWaiting());});
+self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE&&k.startsWith('chairmans-office-')).map(k=>caches.delete(k))))]));});
+const offline=async()=>await caches.match('/offline.html',{cacheName:CACHE})||new Response('Chairman’s Office is offline. Reconnect and retry.',{status:503,headers:{'Content-Type':'text/plain'}});
 self.addEventListener('fetch',event=>{
-  const url=new URL(event.request.url);
-  if(event.request.method==='GET'&&url.origin===self.location.origin&&event.request.mode==='navigate'){
-    event.respondWith(fetch(event.request).catch(async()=>await caches.match('/offline.html')));
-    return;
-  }
-  if(event.request.method!=='GET'||url.origin!==self.location.origin||!url.pathname.startsWith('/_next/static/'))return;
-  event.respondWith(caches.open(CACHE).then(async cache=>{const cached=await cache.match(event.request);if(cached)return cached;const response=await fetch(event.request);if(response.ok)await cache.put(event.request,response.clone());return response;}));
+ const url=new URL(event.request.url);
+ if(event.request.method!=='GET'||url.origin!==self.location.origin)return;
+ // Private API, auth, media and HTML are always network-only.
+ if(event.request.mode==='navigate'){
+  event.respondWith(fetch(event.request).then(r=>[502,503,504].includes(r.status)?offline():r).catch(offline));return;
+ }
+ if(!url.pathname.startsWith('/_next/static/')&&!PUBLIC_SHELL.includes(url.pathname))return;
+ event.respondWith(caches.open(CACHE).then(async cache=>{const cached=await cache.match(event.request);if(cached)return cached;const response=await fetch(event.request);if(response.ok&&response.type==='basic'&&!/private|no-store/i.test(response.headers.get('Cache-Control')||''))try{await cache.put(event.request,response.clone());}catch{}return response;}).catch(()=>fetch(event.request)));
 });
-self.addEventListener('push',event=>{let data={};try{data=event.data?.json()||{}}catch{}event.waitUntil(self.registration.showNotification(data.title||"Chairman's Office",{body:data.body||'Your office requests your attention.',icon:'/icon-192.png',badge:'/icon-192.png',tag:data.inviteId||data.eventId||'executive',renotify:!!data.inviteId,requireInteraction:!!data.inviteId,actions:data.inviteId?[{action:'open',title:'Open to answer'}]:[{action:'open',title:'View update'}],data:{inviteId:data.inviteId,eventId:data.eventId,target:data.target}}));});
-const safeTarget=value=>['activity','phone','messages','calendar','board','finance','documents','deals','intelligence','news','employees','operations','investigations','approvals','family','travel','security','giving','inventory','loans','acquisitions'].includes(value)?value:'activity';
-self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(async clients=>{if(clients.length){await clients[0].focus();clients[0].postMessage({type:'EXECUTIVE_REFRESH',inviteId:event.notification.data?.inviteId,eventId:event.notification.data?.eventId,target:safeTarget(event.notification.data?.target)});return;}const id=event.notification.data?.inviteId,eventId=event.notification.data?.eventId,target=safeTarget(event.notification.data?.target);return self.clients.openWindow(id?'/?invite='+encodeURIComponent(id):eventId?'/?event='+encodeURIComponent(eventId)+'&app='+encodeURIComponent(target||'activity'):'/');}));});
+self.addEventListener('push',event=>{
+ let data={};try{data=event.data?.json()||{};}catch{}
+ const inviteId=safeId(data.inviteId),eventId=safeId(data.eventId),target=safeTarget(data.target);
+ const expired=inviteId&&Number.isFinite(data.expiresAt)&&Date.now()>=data.expiresAt;
+ // User-visible push is required by browsers; expired calls become generic activity notices.
+ const title=inviteId&&!expired?'Incoming executive call':"Chairman's Office";
+ const body=inviteId&&!expired?'Incoming business call. Open your office to answer.':expired?'A call invitation expired. Check your activity.':'Your office has an update. Open the app to review it.';
+ event.waitUntil(self.registration.showNotification(title,{body,icon:'/icon-192.png',badge:'/icon-192.png',tag:inviteId||eventId||'executive',renotify:!!inviteId&&!expired,requireInteraction:!!inviteId&&!expired,actions:[{action:'open',title:inviteId&&!expired?'Open to answer':'View update'}],data:{inviteId:expired?null:inviteId,eventId,target:expired?'activity':target}}));
+});
+self.addEventListener('notificationclick',event=>{
+ event.notification.close();const data=event.notification.data||{},inviteId=safeId(data.inviteId),eventId=safeId(data.eventId),target=safeTarget(data.target);
+ const url=new URL('/',self.location.origin);if(inviteId)url.searchParams.set('invite',inviteId);else{if(eventId)url.searchParams.set('event',eventId);url.searchParams.set('app',target);}
+ event.waitUntil((async()=>{const clients=await self.clients.matchAll({type:'window',includeUncontrolled:true});const client=clients.find(c=>{try{return new URL(c.url).origin===self.location.origin&&new URL(c.url).pathname==='/';}catch{return false;}});
+ if(client){try{await client.focus();client.postMessage({type:'EXECUTIVE_REFRESH',inviteId,eventId,target});return;}catch{}}
+ await self.clients.openWindow(url.href);})());
+});
