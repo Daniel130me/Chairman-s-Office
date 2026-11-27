@@ -70,6 +70,7 @@ jobs:
 
       - name: Chromium PWA lifecycle smoke
         run: |
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list /etc/apt/sources.list.d/microsoft-prod.sources /etc/apt/sources.list.d/packages-microsoft-prod.list
           npm install --prefix /tmp/co-pwa-browser --no-save --no-package-lock playwright@1.55.1
           /tmp/co-pwa-browser/node_modules/.bin/playwright install --with-deps chromium
           PWA_PLAYWRIGHT_PACKAGE=/tmp/co-pwa-browser/package.json node scripts/pwa-browser-smoke.mjs
