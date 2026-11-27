@@ -5,7 +5,7 @@ import {disposeSubsidiary} from '../lib/subsidiary-disposal.mjs';
 import {processLoanObligations} from '../lib/loan-schedule.mjs';
 import {economySnapshot,advanceEconomy,recordSystemAssetPurchase} from '../lib/economy.mjs';
 import {createCompanyLoan,transitionCompanyLoan,repayCompanyLoan,createAcquisition,transitionAcquisition} from '../lib/operations.mjs';
-import {payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
+import {adjustAcquiredIntangible,payAcquisitionPayable,saveAcquisitionAllocation,advanceIntercompany,repayIntercompany,corporateFinanceSnapshot,saveDiligence,adjustInvestment,setLoanTerms,processCovenants,refinanceLoan} from '../lib/corporate-finance.mjs';
 import {captureGroupAccountHistory,listGroupAccountHistory} from '../lib/group-account-history.mjs';
 const enabled=process.env.RUN_CORPORATE_FINANCE_DB_TESTS==='1';
 test('corporate finance transaction integration on an isolated CI database',{skip:!enabled,timeout:60000},async()=>{
@@ -201,6 +201,26 @@ test('corporate finance transaction integration on an isolated CI database',{ski
   snap=await corporateFinanceSnapshot(user.id);
   assert.equal(snap.holdings.find(x=>x.id===nestedHolding.id).status,'exited');
   assert.equal(snap.group.balanceCheck,'0.00');
+
+  // Explicit, evidence-backed non-cash adjustment of acquired intangible assets.
+  const intangibleDeal=await createAcquisition(user,{buyerCompanyId:a,targetName:'Intangible fixture',targetSector:'Tech',sellerName:'Seller',description:'Licence acquisition',purchasePrice:'40',targetValuation:'40',ownershipPercentage:'100',operationKey:uid()});
+  const ia=await saveAcquisitionAllocation(user,intangibleDeal.id,{cash:'0',fixedAssets:'0',intangibles:'20',payables:'0',zeroOpeningLiabilities:true,evidence:'Reviewed purchase allocation documentation.',intangibleEvidence:'Transferable licence and recorded useful life.'});
+  for(const area of ['financial','legal','commercial','operational'])await saveDiligence(user,intangibleDeal.id,{area,status:'cleared',evidence:'Verified diligence for '+area});
+  await transitionAcquisition(user,intangibleDeal.id,{status:'approved',reason:'Verified allocation'});
+  const intangibleCompleted=await transitionAcquisition(user,intangibleDeal.id,{status:'completed',reason:'Confirmed transfer'});
+  const adjust={kind:'intangible-amortization',amount:'3',evidence:'Approved period expense calculation.',operationKey:uid()};
+  await assert.rejects(()=>adjustAcquiredIntangible(other,ia.id,adjust),/unavailable/);
+  const originalGroup=(await corporateFinanceSnapshot(user.id)).group;
+  const ar=await adjustAcquiredIntangible(user,ia.id,adjust);
+  assert.equal((await adjustAcquiredIntangible(user,ia.id,adjust)).id,ar.id);
+  await assert.rejects(()=>adjustAcquiredIntangible(user,ia.id,{...adjust,amount:'4'}),/reference/);
+  await assert.rejects(()=>adjustAcquiredIntangible(user,ia.id,{...adjust,amount:'18',operationKey:uid()}),/carrying value/);
+  await adjustAcquiredIntangible(user,ia.id,{kind:'intangible-impairment',amount:'2',evidence:'Documented recoverable value review.',operationKey:uid()});
+  const iaStatement=(await economySnapshot(user.id)).financialStatements.find(s=>s.companyId===intangibleCompleted.target_company_id);
+  assert.equal(iaStatement.intangibleAssets,'15.00');assert.equal(iaStatement.cash,'0.00');assert.equal(iaStatement.netIncome,'-5.00');
+  const iaGroup=(await corporateFinanceSnapshot(user.id)).group;
+  assert.equal(iaGroup.cash,originalGroup.cash);assert.equal(iaGroup.goodwill,originalGroup.goodwill);assert.equal(iaGroup.balanceCheck,'0.00');
+  assert.equal((await corporateFinanceSnapshot(other.id)).intangibleAdjustments.length,0);
 
   // Simulate 72 hours of absence plus the current UTC day using a second tenant.
   // This exercises the real financial catch-up code without waiting three days.

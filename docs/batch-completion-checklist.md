@@ -25,7 +25,8 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 - [x] Buyer assumption of multiple disbursed loan facilities and acquired trade payables; accrued interest through disposal, creditor-by-creditor evidence, preserved loan/payment history and seller-side servicing fences.
 - [x] Multiple named trade creditors within a single acquisition allocation, individual payment histories and disposal transfer evidence.
 - [x] Forward-only immutable daily group-account observations, captured by the world engine and displayed in Corporate Finance; automated integration regression added (verification pending).
-- [ ] Transfer of external intercompany facilities, contracts, purchase orders, employees and other unresolved operating obligations (currently blocked safely); true period-specific consolidated income reporting; negative net assets/bargain purchases; intangible amortization/impairment; richer ownership/covenant mechanisms.
+- [ ] Transfer of external intercompany facilities, contracts, purchase orders, employees and other unresolved operating obligations (currently blocked safely); true period-specific consolidated income reporting; negative net assets/bargain purchases; automatic useful-life amortization schedules; richer ownership/covenant mechanisms.
+- [x] Evidence-backed acquired intangible amortization and impairment, posted as non-cash charges with carrying-value limits, immutable opening allocation, history and reconciliation; CI verification pending.
 - [ ] Final merge and live ledger reconciliation.
 
 ## Batch 3 — Business Operations
