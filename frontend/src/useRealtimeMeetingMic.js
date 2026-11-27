@@ -54,7 +54,7 @@ export function useRealtimeMeetingMic({meetingId,onStartSpeaking,onTranscript,on
     }
     s.frame=requestAnimationFrame(tick);
    }
-   s.channel.onopen=()=>{if(!live())return;clearTimeout(s.connectTimer);track.enabled=true;s.lastClear=performance.now();setPhase('listening');s.frame=requestAnimationFrame(tick);};
+   s.channel.onopen=()=>{if(!live())return;clearTimeout(s.connectTimer);s.peerTrack.enabled=true;s.lastClear=performance.now();setPhase('listening');s.frame=requestAnimationFrame(tick);};
    s.channel.onclose=()=>fail('Streaming microphone connection closed.');
    s.channel.onerror=()=>fail('Streaming microphone connection failed.');
    async function finishTranscript(event){
