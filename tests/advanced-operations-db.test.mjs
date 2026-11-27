@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {sql,uid,database} from '../backend/src/db.mjs';
 import {createPurchaseOrder,transitionPurchaseOrder,createContract,transitionContract,createInvoice,payInvoice} from '../lib/operations.mjs';
 import {sellInventory} from '../lib/procurement.mjs';
+import {reconcileWorlds} from '../scripts/reconcile-worlds.mjs';
 import {economySnapshot} from '../lib/economy.mjs';
 import {recordStocktake,returnCustomerSale,returnSupplierLine,reviewSupplier,createObligation,completeObligation,processContractObligations,openDispute,addDisputeEvidence,resolveDispute,advancedOperationsSnapshot} from '../lib/advanced-operations.mjs';
 test('stock, returns, contractual enforcement and settlement reconcile in PostgreSQL',{skip:process.env.RUN_ADVANCED_OPERATIONS_DB_TESTS!=='1',timeout:60000},async()=>{
@@ -58,6 +59,7 @@ test('stock, returns, contractual enforcement and settlement reconcile in Postgr
   await transitionPurchaseOrder(u,second.id,{status:'paid',reason:'Net payable settled'});
   const [paid]=await sql('SELECT paid_total,status FROM purchase_orders WHERE id=$1',[second.id]);assert.equal(paid.paid_total,'60.00');assert.equal(paid.status,'paid');
   snapshot=await economySnapshot(u.id);assert.equal(snapshot.financialStatements[0].cash,'970.00');assert.equal(snapshot.financialStatements[0].inventory,'100.00');assert.equal(snapshot.financialStatements[0].payables,'0.00');assert.equal(snapshot.financialStatements[0].balanceCheck,'0.00');
+  const violations=(await reconcileWorlds()).filter(r=>r.violations);assert.deepEqual(violations,[]);
  }finally{
   await sql('DELETE FROM commercial_disputes WHERE user_id=$1',[u.id]);
   await sql('DELETE FROM inventory_returns WHERE user_id=$1',[u.id]);
