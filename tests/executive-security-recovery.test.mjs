@@ -29,12 +29,17 @@ test('provider selection continues when syntactically valid JSON is semantically
 });
 test('executive backoff and security processing remain durable and tenant scoped',()=>{
  const executive=read('lib/autonomous-executives.mjs');
+ const agency=read('lib/character-agency.mjs');
  const security=read('lib/security.mjs');
  const schema=read('lib/economy-schema.mjs');
  const engine=read('lib/world-engine.mjs');
  assert.match(executive,/interval '40 minutes'/);
  assert.match(executive,/decision->>'errorCode'='AI_EXECUTIVE_UNAVAILABLE'/);
- assert.match(executive,/validate:raw=>parseExecutiveDecision/);
+ assert.match(executive,/enqueueAgencyDecision\(q,/);
+ assert.match(agency,/validate:raw=>parseAgencyDecision/);
+ assert.match(agency,/FOR UPDATE SKIP LOCKED/);
+ assert.match(agency,/attempts>=5/);
+ assert.match(agency,/WHERE id=\$1 AND user_id=\$2 AND status='processing' AND attempts=\$4/);
  assert.match(executive,/overdue-loan-installment/);
  assert.match(schema,/security_incident_investigation_unique/);
  assert.match(security,/ON CONFLICT\(user_id,source_investigation_id\)/);
