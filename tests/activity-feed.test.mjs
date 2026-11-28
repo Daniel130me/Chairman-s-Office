@@ -4,7 +4,7 @@ import {buildActivityFeed} from '../frontend/src/activity-feed.js';
 
 const user={id:'chairman-1',name:'Oluwagbenga Kosoko'};
 const state={
- contacts:[{id:'amara',name:'Amara Okafor'},{id:'cfo',name:'Daniel Mercer'}],
+ contacts:[{id:'amara',name:'Amara Okafor'},{id:'cfo',name:'Daniel Mercer'},{id:'omar',name:'Omar Haddad'}],
  events:[{id:'event-away',kind:'competitor-move',title:'Competitor entered a new market',body:'The rival announced an expansion.',created_at:'2026-11-26T08:00:00Z',contact_id:'cfo'}],
  messages:[
   {id:'message-out',contact_id:'amara',direction:'outgoing',channel:'chat',body:'Please ask the CFO to call me.',created_at:'2026-11-26T08:10:00Z'},
@@ -14,6 +14,8 @@ const state={
  calls:[{id:'call-1',contact_id:'cfo',invite_id:'invite-1',started_at:'2026-11-26T08:30:00Z',status:'missed',summary:'Cash-flow discrepancy'}],
  invites:[{id:'invite-1',contact_id:'cfo',status:'missed',kind:'call',subject:'Urgent finance call',preview:'Please call back.',due_at:'2026-11-26T08:30:00Z'}],
  meetings:[{id:'meeting-1',title:'Executive finance review',status:'completed',start_at:'2026-11-26T08:40:00Z',created_at:'2026-11-26T08:35:00Z',attendees:['chairman-1','cfo'],minutes:'The CFO will provide a reconciled report.'}],
+ calendarEvents:[{id:'calendar-event-1',title:'Berlin offers discussion',status:'confirmed',starts_at:'2026-12-01T09:00:00Z',ends_at:'2026-12-01T09:30:00Z',timezone:'Etc/GMT-1',timezone_label:'CET',attendees:['omar'],coordinator_contact_id:'amara',source_contact_id:'omar',created_at:'2026-11-26T09:20:00Z',agenda:'Discuss Berlin offers.'}],
+ meetingProposals:[{id:'proposal-1',contact_id:'omar',contact_name:'Omar Haddad',contact_title:'Founder and CEO',proposal_text:'I can make time tomorrow morning.',agenda:'Berlin offers',priority:'high',status:'awaiting-chairman',created_at:'2026-11-26T09:25:00Z'}],
  meeting_turns:[{id:'turn-1',meeting_id:'meeting-1',speaker:'Oluwagbenga Kosoko',message:'Proceed with the reconciliation.',created_at:'2026-11-26T08:42:00Z'}],
  decisions:[{id:'decision-1',thread_id:'thread-1',content:'Reconcile the two disputed transactions.',created_at:'2026-11-26T08:45:00Z'}],
  operations:{
@@ -32,6 +34,8 @@ test('builds one chronological feed across personal, office and business records
  assert.ok(feed.some(item=>item.id==='message:message-out'));
  assert.ok(feed.some(item=>item.id==='group-message:group-1'));
  assert.ok(feed.some(item=>item.id==='meeting:meeting-1'));
+ assert.ok(feed.some(item=>item.id==='calendar-event:calendar-event-1'));
+ assert.ok(feed.some(item=>item.id==='meeting-proposal:proposal-1'));
  assert.ok(feed.some(item=>item.id==='audit:audit-1'));
  assert.ok(feed.some(item=>item.id==='ledger:journal-1'));
  assert.ok(feed.some(item=>item.id==='action-request:approval-1'));
@@ -45,6 +49,8 @@ test('distinguishes chairman participation from activity that happened in the of
  assert.equal(feed.find(item=>item.id==='message:message-out').participation,'you');
  assert.equal(feed.find(item=>item.id==='message:message-in').participation,'addressed');
  assert.equal(feed.find(item=>item.id==='meeting-turn:turn-1').participation,'you');
+ assert.equal(feed.find(item=>item.id==='calendar-event:calendar-event-1').participation,'you');
+ assert.equal(feed.find(item=>item.id==='meeting-proposal:proposal-1').participation,'addressed');
  assert.equal(feed.find(item=>item.id==='event-away').participation,'away');
  assert.equal(feed.find(item=>item.id==='audit:audit-1').participation,'you');
 });

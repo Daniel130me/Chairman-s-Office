@@ -117,3 +117,32 @@ test('real-world intelligence refresh is connected to the durable world engine a
  assert.match(routes,/intelligence\/refresh/);assert.match(routes,/realWorldRefreshWorkflow/);
  assert.match(activation,/ENGINE_REVISION=27/);
 });
+
+test('calendar proposals and colleague delegation are persistent across messages, voice, phone and Activity',()=>{
+ const world=read('backend/src/world.mjs'),calendar=read('lib/calendar-actions.mjs'),colleague=read('lib/colleague-calls.mjs');
+ const app=read('frontend/src/App.jsx'),vapi=read('lib/vapi-tools.mjs'),schema=read('lib/economy-schema.mjs');
+ const feed=read('frontend/src/activity-feed.js'),history=read('lib/activity-history.mjs');
+ assert.match(world,/handleDelegatedColleagueCall/);
+ assert.match(world,/handleChiefOfStaffCalendarRequest/);
+ assert.match(world,/syncMeetingProposals/);
+ assert.match(calendar,/recordMeetingProposalFromMessage/);
+ assert.match(calendar,/coordinateMeetingProposal/);
+ assert.match(colleague,/report_to_chairman/);
+ assert.match(colleague,/deliverColleagueCallReport/);
+ assert.match(vapi,/arrange_colleague_call/);
+ assert.match(app,/calendar\\/proposals/);
+ assert.match(app,/page==='calendar-event'/);
+ assert.match(schema,/CREATE TABLE IF NOT EXISTS calendar_events/);
+ assert.match(schema,/CREATE TABLE IF NOT EXISTS meeting_proposals/);
+ assert.match(feed,/state\\.calendarEvents/);
+ assert.match(history,/calendar_events/);
+});
+test('push and external decision intelligence are wired into production paths',()=>{
+ const push=read('lib/push.mjs'),events=read('lib/event-notifications.mjs'),news=read('lib/real-world-news.mjs');
+ const context=read('lib/real-world-context.mjs'),autonomous=read('lib/autonomous-communications.mjs');
+ assert.match(push,/pushConfigurationStatus/);
+ assert.match(events,/executive-message-received/);
+ assert.match(news,/parseGoogleNewsRss/);
+ assert.match(context,/REAL_WORLD_DECISION_RULES/);
+ assert.match(autonomous,/syncMeetingProposals/);
+});
