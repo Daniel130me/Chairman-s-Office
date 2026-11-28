@@ -153,7 +153,7 @@ async function startVapi(data,c){
       'BOUNDARIES: Do not claim to make real-world PSTN calls or perform external actions. You can arrange incoming calls between characters inside the Chairman’s Office app. Confirm an action only after the relevant tool returns success.',
       'COLLEAGUES: '+(colleagues||'Use the Chairman’s executive directory to identify colleagues by name or job title.'),
       'DELEGATION: When the Chairman asks you to have an executive call him, ask an executive to call him, or arrange a callback, use arrange_internal_call. Do not merely promise to do it and do not refuse because the world is fictional.',
-      'FOLLOW-THROUGH: When the Chairman clearly asks you to send him a text message, debrief, recap, summary or reminder, compose it from verified facts and call send_chairman_message. Do not ask for confirmation when the request and recipient are clear. Do not merely promise. Never say it was sent until the tool succeeds. This sends an in-app message to the Messages app, not an external SMS.',
+      'MANDATORY MESSAGE DELIVERY: If the Chairman asks you to send, text, or save a debrief, recap, summary, call notes or reminder in Messages, you MUST call send_chairman_message before presenting or reading out the debrief. Compose the complete message from verified facts, call the tool, and wait for its result. Only after a successful result may you confirm it was sent. Do not substitute a spoken summary for delivery. If the tool fails, say clearly that it was not sent. This sends an in-app message, not an external SMS.',
       'COMMITMENT BOUNDARY: Do not promise to prepare documents, contact third parties or complete work unless a supported tool succeeds. For supported consequential business actions, use propose_business_action and explain that Chairman approval is required. If an action is not supported, say so honestly and offer the nearest supported next step.',
       'BUSINESS ACTIONS: If the Chairman asks for a consequential company action such as an expense, hiring, firing, activating a contract or delegating work, collect any missing details and use propose_business_action. This submits an approval request; it does not execute the action. Never say the action is complete until the Chairman approves it and the application confirms execution. Tell the Chairman to review the Approvals app.',
       'TOOL RULES: For another executive, pass their name or job title as recipient. For a callback from yourself, omit recipient. Use delaySeconds=0 for an immediate call or the exact requested delay, such as 30 for 30 seconds. Always include reason as a faithful copy of the Chairman’s request, preserving timing words. Never invent a delay. If the timing is vague, ask one short clarifying question. If the tool reports an error, explain the error honestly.',
@@ -180,14 +180,20 @@ async function startVapi(data,c){
       type:'function',async:false,
       function:{
         name:'send_chairman_message',
-        description:'Send an in-app text message from the current executive to the Chairman. Use this when the Chairman asks you to send him a debrief, recap, summary, reminder or other text message. Compose the message from verified facts in this call. Do not claim delivery unless this tool succeeds. This does not send an SMS to a mobile number.',
+        description:'MANDATORY action: save a debrief, recap, summary, call notes or requested text from the current call into the Chairman’s Messages app. Invoke this immediately when the Chairman asks you to send or text something. Compose the complete message from verified facts. Do not read out the debrief instead of using this tool. Do not claim delivery unless this tool succeeds. This is an in-app message, not an SMS.',
         parameters:{type:'object',properties:{
           body:{type:'string',minLength:1,maxLength:3500,description:'The complete, polished message to save in the Chairman’s Office Messages app. Include only verified facts and clearly label any open questions or pending decisions.'}
         },required:['body'],additionalProperties:false}
       },
+      strict:true,
+      maxTokens:700,
       server:{url:window.location.origin+'/api/vapi/tools'},
       parameters:[{key:'action_token',value:'{{ actionToken }}'}],
-      messages:[{type:'request-start',content:'I am preparing and sending that message now.',blocking:false}]
+      messages:[
+        {type:'request-start',content:'I am saving that message to your Messages app now.',blocking:false},
+        {type:'request-complete',content:'The message has been saved to your Messages app.',blocking:false},
+        {type:'request-failed',content:'I could not save that message, so it has not been delivered.',blocking:false}
+      ]
     };
     const overrides={
       firstMessage:'Good day, Chairman. '+c.name+' speaking.',

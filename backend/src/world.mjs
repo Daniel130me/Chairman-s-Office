@@ -8,6 +8,7 @@ import {normalizeMailSubject,replyMailSubject} from '../../lib/mail-rules.mjs';
 
 import {createVapiActionToken} from '../../lib/vapi-action-token.mjs';
 import {failedCallSummary} from '../../lib/call-summary-rules.mjs';
+import {requestsCallDebrief,formatCallDebrief} from '../../lib/call-debrief.mjs';
 import {economySnapshot} from '../../lib/economy.mjs';
 import {boardSnapshot} from '../../lib/board-governance.mjs';
 import {relationshipSnapshot} from '../../lib/relationship-world.mjs';
@@ -195,15 +196,45 @@ export async function startCall(user,contactId,inviteId=null){
     colleagues
   };
 }
+async function deliverRequestedCallDebrief(call,summary,transcript){
+ if(call.status==='failed'||!requestsCallDebrief(transcript))return {status:'not-requested'};
+ const contact=await one('SELECT id,name FROM contacts WHERE id=$1 AND user_id=$2 AND world_id=$3',[call.contact_id,call.user_id,call.world_id]);
+ if(!contact)return {status:'contact-unavailable'};
+ const body=formatCallDebrief({contactName:contact.name,summary,transcript});
+ return transaction(async q=>{
+  const [prior]=await q("SELECT id,contact_id FROM messages WHERE user_id=$1 AND (client_message_key=$2 OR source_call_id=$2) LIMIT 1 FOR UPDATE",[call.user_id,call.id]);
+  if(prior){
+   if(prior.contact_id!==call.contact_id)throw Error('Call debrief idempotency key belongs to another contact.');
+   return {status:'already-sent',messageId:prior.id};
+  }
+  const [existingDuringCall]=await q("SELECT id,contact_id FROM messages WHERE user_id=$1 AND contact_id=$2 AND direction='incoming' AND channel='chat' AND created_at BETWEEN $3 AND COALESCE($4,now()) AND body ~* '(debrief|recap|summary|meeting[[:space:]]+notes)' ORDER BY created_at DESC LIMIT 1 FOR UPDATE",[call.user_id,call.contact_id,call.started_at,call.ended_at]);
+  if(existingDuringCall)return {status:'already-sent',messageId:existingDuringCall.id};
+  const [inserted]=await q("INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,source_call_id,client_message_key) VALUES($1,$2,$3,$4,'incoming','chat',$5,$6,$6) ON CONFLICT DO NOTHING RETURNING id",[uid(),call.user_id,call.world_id,call.contact_id,body,call.id]);
+  if(!inserted){
+   const [existing]=await q("SELECT id,contact_id FROM messages WHERE user_id=$1 AND (client_message_key=$2 OR source_call_id=$2) LIMIT 1",[call.user_id,call.id]);
+   if(!existing||existing.contact_id!==call.contact_id)throw Error('The requested debrief could not be saved safely.');
+   return {status:'already-sent',messageId:existing.id};
+  }
+  await q('UPDATE contacts SET last_contact_at=now() WHERE id=$1 AND user_id=$2',[call.contact_id,call.user_id]);
+  await q("INSERT INTO events(id,user_id,world_id,contact_id,kind,title,body) VALUES($1,$2,$3,$4,'executive-message-sent',$5,$6)",[uid(),call.user_id,call.world_id,call.contact_id,'Call debrief from '+contact.name,contact.name+' delivered the Chairman’s requested call debrief to Messages.']);
+  return {status:'sent',messageId:inserted.id};
+ });
+}
 export async function finishCall(user,id,transcript,status='completed',failureReason=''){
- const call=await one('SELECT * FROM calls WHERE id=$1 AND user_id=$2',[id,user.id]);if(!call)throw Error('Call unavailable');if(call.status!=='active')return {summary:call.summary};
+ const call=await one('SELECT * FROM calls WHERE id=$1 AND user_id=$2',[id,user.id]);if(!call)throw Error('Call unavailable');
+ if(call.status!=='active'){
+  const debrief=call.status==='completed'?await deliverRequestedCallDebrief(call,call.summary,call.transcript||[]):{status:'not-requested'};
+  return {summary:call.summary,debrief};
+ }
  const rows=mergeTranscript(call.transcript,transcript);
  const noConversationFailure=status==='failed'&&!rows.length?failedCallSummary(failureReason):null;
  const summary=noConversationFailure||await ask('Summarize this fictional executive conversation precisely: decisions, commitments, risks, follow-ups. Do not invent facts.',JSON.stringify(rows),{fallback:rows.map(r=>r.role+': '+r.text).join(' ').slice(0,1500)||'Call completed; no transcript available.'});
  const updated=await transaction(async q=>{const [latest]=await q('SELECT * FROM calls WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,user.id]);if(!latest||latest.status!=='active')return null;const merged=mergeTranscript(latest.transcript,rows);const finalSummary=merged.length===rows.length?summary:merged.map(r=>r.role+': '+r.text).join(' ').slice(0,3000);return (await q("UPDATE calls SET ended_at=now(),status=$4,transcript=$1,summary=$2 WHERE id=$3 AND user_id=$5 AND status='active' RETURNING summary",[JSON.stringify(merged),finalSummary,id,status==='failed'?'failed':'completed',user.id]))[0];});
  const finalSummary=updated?.summary??(await one('SELECT summary FROM calls WHERE id=$1 AND user_id=$2',[id,user.id]))?.summary;
  if(updated&&rows.length)await queueCharacterMemory({userId:user.id,worldId:call.world_id,contactId:call.contact_id,sourceType:'voice-call',sourceId:id,context:{transcript:rows.slice(-40).map(r=>({role:r.role,text:r.text.slice(0,1200)})),summary:finalSummary,status}}).catch(error=>console.warn('Call memory queue unavailable',error.code||error.name));
- return {summary:finalSummary};
+ let debrief={status:'not-requested'};
+ if(status!=='failed')debrief=await deliverRequestedCallDebrief({...call,status:'completed',ended_at:new Date().toISOString()},finalSummary,rows);
+ return {summary:finalSummary,debrief};
 }
 export async function createMeeting(user,data){
  const w=await one('SELECT * FROM worlds WHERE user_id=$1',[user.id]);if(!w)throw Error('Empire unavailable');
