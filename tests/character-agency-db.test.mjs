@@ -2,7 +2,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sql,transaction,uid,database} from '../backend/src/db.mjs';
-import {enqueueAgencyDecision,executeAgencyDecision,setAuthorityGrant,agencySnapshot,processAgencyJob} from '../lib/character-agency.mjs';
+import {enqueueAgencyDecision,executeAgencyDecision,setAuthorityGrant,agencySnapshot,processAgencyJob,processIndependentReview,reconcileAgencyApprovals} from '../lib/character-agency.mjs';
+import {processAutonomousExecutives} from '../lib/autonomous-executives.mjs';
+import {decideAction} from '../lib/action-requests.mjs';
 test('agency PostgreSQL: refusal, authority, task assignment, spending caps, review, rollback and tenant isolation',{skip:process.env.RUN_CHARACTER_AGENCY_DB_TESTS!=='1',timeout:60000},async()=>{
  assert.match(process.env.DATABASE_URL||'',/@127\.0\.0\.1:5432\/chairman_ci\?/);
  const userId=uid(),other=uid(),worldId=uid(),companyId=uid(),actorId=uid(),reviewerId=uid();
@@ -37,8 +39,11 @@ test('agency PostgreSQL: refusal, authority, task assignment, spending caps, rev
   await setAuthorityGrant(user,actorId,{companyId,actionType:'expense',mode:'coapproval',reviewerId,perActionLimit:'60',dailyLimit:'200',reason:'Independent review'});
   const pending=await create(expense),review=await execute(pending);assert.equal(review.status,'awaiting-review');
   assert.equal(review.reviewer_id,reviewerId);
-  await sql("UPDATE character_decision_records SET review=$2 WHERE id=$1",[review.id,JSON.stringify({choice:'approve',reviewerId})]);
-  const reviewed=await transaction(q=>executeAgencyDecision(q,pending.row,pending.decision,{reviewed:true}));assert.equal(reviewed.status,'executed');
+  assert.equal(await processIndependentReview(userId,async(system,prompt)=>{const input=JSON.parse(prompt);assert.equal(input.reviewer.id,reviewerId);assert.ok(input.ownPsychology);return {choice:'approve',reason:'Independent fixture review supports expense'};}),true);
+  const [reviewed]=await sql('SELECT * FROM character_decision_records WHERE id=$1',[review.id]);assert.equal(reviewed.status,'executed');assert.equal(reviewed.review.reviewerId,reviewerId);
+  const pendingReject=await execute(await create(expense));assert.equal(pendingReject.status,'awaiting-review');
+  await processIndependentReview(userId,async()=>({choice:'reject',reason:'Evidence insufficient'}));
+  assert.equal((await sql('SELECT status FROM character_decision_records WHERE id=$1',[pendingReject.id]))[0].status,'blocked');
   await setAuthorityGrant(user,actorId,{companyId,actionType:'expense',mode:'prohibited',reason:'Revoked'});
   assert.equal((await execute(await create(expense))).status,'blocked');
   const negotiation=await create({...base,choice:'negotiate',actionType:'communicate',payload:{recipientId:reviewerId,body:'Can we discuss alternate terms?'}},'goal-review');
@@ -46,6 +51,23 @@ test('agency PostgreSQL: refusal, authority, task assignment, spending caps, rev
   assert.equal((await sql('SELECT count(*)::int n FROM world_conversation_messages WHERE id=$1 AND user_id=$2',[sent.result.messageId,userId]))[0].n,1);
   const failed=await transaction(q=>enqueueAgencyDecision(q,{userId,worldId,contactId:actorId,sourceType:'goal-review',sourceId:uid(),evidence:{title:'Fixture'}}));
   const failedResult=await processAgencyJob(userId,failed.id,async()=>null);assert.equal(failedResult.status,'pending');assert.equal(failedResult.decision,null);
+  // Existing business-record discovery must enter this same queue, without duplicating effects.
+  await processAutonomousExecutives(userId);
+  const [event]=await sql("SELECT * FROM character_decision_records WHERE user_id=$1 AND source_type='business-event'",[userId]);
+  assert.ok(event,'The periodic finance event is queued');
+  let seen=false;
+  const eventResult=await processAgencyJob(userId,event.id,async(system,prompt)=>{
+   const input=JSON.parse(prompt);seen=true;assert.equal(input.actor.id,actorId);assert.ok(input.ownPsychology.constitution);assert.ok(input.externalContext);
+   return {...base,choice:'investigate',evidenceIds:[event.source_id]};
+  });
+  assert.ok(seen);assert.equal(eventResult.status,'executed');assert.ok(eventResult.result.taskId);
+  await processAutonomousExecutives(userId);
+  const [cycle]=await sql("SELECT * FROM executive_work_cycles WHERE user_id=$1 AND decision->>'agencyDecisionId'=$2",[userId,event.id]);
+  assert.equal(cycle.status,'executed');assert.equal(cycle.task_id,eventResult.result.taskId);
+  // Reserved approval outcomes reconcile to the same decision history.
+  await decideAction(user,noGrant.approval_id,{decision:'rejected',reason:'Fixture decline'});
+  await reconcileAgencyApprovals(userId);
+  assert.equal((await sql('SELECT status FROM character_decision_records WHERE id=$1',[noGrant.id]))[0].status,'blocked');
   assert.equal((await agencySnapshot(other)).characterDecisions.length,0);
   assert.equal((await agencySnapshot(other)).characterAuthorityGrants.length,0);
  }finally{await sql('DELETE FROM users WHERE id=ANY($1::uuid[])',[[userId,other]]);await database().end();}
