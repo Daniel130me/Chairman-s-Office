@@ -1,6 +1,6 @@
 # Autonomous Character System — Implementation Tracker
 
-Scope: four phases. Phase 2 was explicitly authorized while Phase 1 live-preview and live-model verification remained open. Both phases are included in the isolated Phase 2 branch. Production changes require a reviewed release; this branch is isolated from main.
+Scope: four phases. Phase 2 was explicitly authorized while Phase 1 live-preview and live-model verification remained open. Phases 1–3 are included in the isolated Phase 3 branch. Production changes require a reviewed release; this branch is isolated from main.
 
 Status convention: [x] implementation committed; [ ] outstanding or verification not yet confirmed. A committed task does not imply a passed acceptance test.
 
@@ -52,12 +52,31 @@ Scope decisions: autonomous evidence-backed tasks, in-world communication, and r
 
 Review: [Phase 1–2 draft PR #7](https://github.com/Daniel130me/Chairman-s-Office/pull/7).
 
-## Phase 3 — Consequences, Learning, Evolution and Reputation
-- [ ] Immediate, delayed and indirect consequences with causal links and evidence.
-- [ ] Gradual learning, beliefs, persistent psychological changes and relationship evolution.
-- [ ] Role-sensitive performance, trust, loyalty, respect, competence, integrity and audience-specific reputation.
-- [ ] Fair attribution, uncertainty, investigations and evidence-supported employment recommendations.
-- [ ] Test judgement vs luck, repeated misconduct, positive performance, dissent and career transitions.
+## Phase 3 — Consequences, Learning, Evolution and Reputation (implementation and isolated CI verified)
+- [x] Add a durable causal consequence ledger and pending/resolved outcome watches; distinguish decisions from verified action effects and later outcomes.
+- [x] Reconcile verified task assignments, report delivery, cancellation, fictional ledger entries, communication and reserved employment/contract actions against actual records.
+- [x] Link delayed task and contract outcomes and indirect delegation/stakeholder effects without duplicating state or inventing causality.
+- [x] Derive bounded learning, lesson inputs, evolving psychological state and trait offsets from durable evidence; preserve original constitution and use current professional mandates after role changes.
+- [x] Apply directional outcome-based trust and respect changes to character deliberation without converting disagreement into disloyalty.
+- [x] Compute distinct, role-weighted performance dimensions, evidence confidence, previous-period comparisons, peer rankings and audience-specific relationship assessments; insufficient evidence remains unranked.
+- [x] Support Chairman-attributed judgment, work quality and conduct reviews with recorded sources, decision-time context, uncertainty and explicit responsibility; prevent duplicate assessments.
+- [x] Require resolved investigations and referenced evidence before substantiated conduct assessments; allegations alone have no adverse score.
+- [x] Support append-only assessment withdrawal/revision and recompute learning and reputation from active evidence.
+- [x] Integrate evidence-based recommendations with HR promotion review and character development with agenda, communication and agency contexts; retain former employee history.
+- [x] Add PWA performance and reputation views in Employees and Contacts, including review and correction controls.
+- [x] Automated checks cover direct and delayed effects, duplicate prevention, role weighting, sufficient evidence, attribution vs luck, repeated negative conduct evidence, refusal, learning bounds, corrections, tenant isolation, contract completion and employment separation.
+
+### Phase 3 verification
+Runtime and test commit: `d1c00b63542ceb480bcd5bcc454ff2d80c44fb35`.
+- [x] [Unit and regression tests](https://github.com/Daniel130me/Chairman-s-Office/actions/runs/46176196295).
+- [x] [Next.js migration checks](https://github.com/Daniel130me/Chairman-s-Office/actions/runs/46176196258).
+- [x] [Full isolated PostgreSQL and PWA workflow](https://github.com/Daniel130me/Chairman-s-Office/actions/runs/46176196273): repeatable migrations, previous phase integration suites, Phase 3 outcome and attribution tests, invariants, backup/restore, production build and Chromium PWA smoke steps passed.
+- [ ] Live Vercel preview remains blocked by the build-rate limit; no billing change or production release attempted.
+- [ ] Live-model, long-running simulation and installed-device acceptance remain release gates in Phase 4.
+
+Design constraints: the world engine automatically records actual outcomes and derives evidence-based changes. Scoring is rule-based and conservative: a completed report supports follow-through, not necessarily judgment or competence; an external shock, cancelled task, disagreement or unproven allegation does not create a negative rating. Subjective decision quality, work quality and individual misconduct require a documented Chairman assessment or an established finding with explicit attribution. Rankings compare internal peers in the same role family after a minimum evidence threshold; they do not automatically hire, promote or dismiss anyone. Existing authority and employment workflows remain in control. No real money moved. Live-provider quality, broader causal business scenarios, and extended operation are not established by the isolated tests.
+
+Review: [Phase 1–3 draft PR #8](https://github.com/Daniel130me/Chairman-s-Office/pull/8).
 
 ## Phase 4 — Autonomous Living World, PWA Integration and Production Readiness
 - [ ] Bounded autonomous scheduling, recovery, activity prioritization and cross-character coordination.
