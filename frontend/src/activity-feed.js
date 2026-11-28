@@ -293,6 +293,45 @@ export function buildActivityFeed(state = {}, user = {}) {
     });
   }
 
+  for (const event of list(state.calendarEvents)) {
+    const attendees = list(event.attendees).map(id => contactName(id) || id).filter(Boolean);
+    const confirmed = normalise(event.status) === 'confirmed';
+    add('calendar-event', event, {
+      date: event.created_at,
+      kind: 'calendar-event',
+      category: 'meetings',
+      title: (confirmed ? 'Calendar invitation confirmed · ' : 'Tentative calendar hold · ') + (event.title || 'Executive meeting'),
+      body: [event.agenda, attendees.length ? 'Participants: ' + attendees.join(', ') : '', 'Scheduled for ' + new Date(event.starts_at).toLocaleString()].filter(Boolean).join(' · '),
+      source: 'Calendar',
+      actor: 'Executive Office',
+      person: attendees.join(', '),
+      participation: 'you',
+      status: event.status,
+      requiresAttention: normalise(event.status) === 'tentative',
+      target: 'calendar',
+      contactId: event.source_contact_id
+    });
+  }
+
+  for (const proposal of list(state.meetingProposals)) {
+    const contact = contactName(proposal.contact_id) || proposal.contact_name || 'Executive';
+    add('meeting-proposal', proposal, {
+      date: proposal.created_at,
+      kind: 'meeting-proposal',
+      category: 'meetings',
+      title: (proposal.priority === 'high' ? 'Urgent meeting proposal · ' : 'Meeting proposal · ') + contact,
+      body: proposal.proposal_text || proposal.agenda || 'A meeting proposal is awaiting coordination',
+      source: 'Calendar',
+      actor: contact,
+      person: contact,
+      participation: 'addressed',
+      status: proposal.status,
+      requiresAttention: ['awaiting-chairman', 'needs-chairman'].includes(normalise(proposal.status)),
+      target: 'calendar',
+      contactId: proposal.contact_id
+    });
+  }
+
   for (const meeting of list(state.meetings)) {
     const turns = turnsByMeeting.get(meeting.id) || [];
     const hasChairmanTurn = turns.some(turn => chairmanName(turn.speaker || contactName(turn.contact_id), user));
