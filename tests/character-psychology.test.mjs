@@ -9,7 +9,8 @@ test('stable individual constitution retains existing temperament, agenda and am
 test('religion and moral worth are not inferred from demographic information',()=>{
  const a=deriveConstitution(contact);
  assert.deepEqual(a,deriveConstitution({...contact,name:'Different name',nationality:'Different',religion:'Christian'}));
- assert.equal(a.worldview.type,'unspecified');assert.deepEqual(a.worldview.convictions,[]);
+ assert.equal(typeof a.worldview.type,'string');assert.ok(Array.isArray(a.worldview.convictions));
+ const samples=Array.from({length:40},(_,i)=>deriveConstitution({...contact,id:'sample-'+i}));assert.ok(new Set(samples.map(p=>p.worldview.type)).size>2);assert.match(a.professionalIdentity.responsibility,/liquidity/);
 });
 test('context changes temporary appraisal without rewriting constitution or baseline',()=>{
  const constitution=deriveConstitution(contact),baseline=initialPsychologicalState(constitution);
