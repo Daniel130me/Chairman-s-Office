@@ -78,11 +78,11 @@ export async function ask(system,prompt,{fallback='',json=false,validate}={}){
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),14000);
     let ticket=null,outputCharacters=0,success=false;
-    const dispatch=async fn=>{if(ticket)await finishProviderAttempt(ticket,0,false);ticket=await reserveProviderAttempt(name,system.length+prompt.length);return fn();};
+    const dispatch=async fn=>{if(ticket)await finishProviderAttempt(ticket,0,false);ticket=null;ticket=await reserveProviderAttempt(name,system.length+prompt.length);return fn();};
     try{
       const value=name==='gemini'
         ?await requestGemini(system,prompt,controller.signal,json,c,dispatch)
-        :await requestCompatible(name,system,prompt,controller.signal,json,c);
+        :await requestCompatible(name,system,prompt,controller.signal,json,c,dispatch);
       outputCharacters=typeof value==='string'?value.length:0;
       const parsed=parseOutput(value,json);
       if(parsed!==null){
