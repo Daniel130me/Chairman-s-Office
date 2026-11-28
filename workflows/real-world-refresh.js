@@ -5,5 +5,5 @@ export async function realWorldRefreshWorkflow(userId){
 }
 async function refreshStep(userId){
  "use step";
- return refreshRealWorldSignals(userId);
+ return refreshRealWorldSignals(userId,{force:true});
 }

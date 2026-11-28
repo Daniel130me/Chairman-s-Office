@@ -374,7 +374,7 @@ return <div className={'phone-environment '+(world.settings?.theme==='light'?'li
 {page==='document'&&<Document d={detail} onBack={back}/>}
 {page==='deals'&&<Deals state={world} onBack={back} onChange={reload} notify={notify}/>}
 {page==='intelligence'&&<Intelligence state={world} onBack={back} onOpen={t=>go('matter',t)} onChange={reload} notify={notify}/>}
-{page==='news'&&<News state={world} onBack={back}/>} 
+{page==='news'&&<News state={world} onBack={back} onRefresh={reload} notify={notify}/>} 
 {page==='matter'&&<Matter t={detail} state={world} onBack={back} onChange={reload} notify={notify}/>}
 {page==='settings'&&<Settings state={world} onBack={back} onChange={reload} notify={notify} onLogout={logout} pwa={pwa} onUpdate={updateApp} lastSync={lastSync}/>}
 </div>}
@@ -842,10 +842,21 @@ function Operations({state,onBack,onChange,notify}){
  <div className="content-section"><h3>Payroll history</h3>{ops.payroll.map(x=><div className="detail-section" key={x.id}><b>{x.company_name} · {x.period_month}</b><p>{x.employee_count} employees · {usd(x.total)} · {shortDate(x.paid_at)}</p></div>)}</div>
  <div className="content-section"><h3>Audit trail</h3>{ops.auditLog.map(x=><div className="detail-section" key={x.id}><b>{x.action} · {x.entity_type}</b><p>{x.actor_name} · {shortDate(x.created_at)} {shortTime(x.created_at)}</p><RichText text={x.reason||'No additional reason recorded.'}/></div>)}</div><div className="info-note">All transactions are fictional and remain inside your private empire. Invoices, contracts and payroll update records; no external payments or legal agreements are made.</div></>;
 }
-function News({state,onBack}){
- const [query,setQuery]=useState('');
+function News({state,onBack,onRefresh,notify}){
+ const [query,setQuery]=useState(''),[refreshing,setRefreshing]=useState(false);
  const items=(state.realWorldNews||[]).filter(n=>(n.title+' '+n.domain+' '+(n.source_country||'')).toLowerCase().includes(query.toLowerCase()));
- return <><AppHeader title="News" back={onBack} subtitle="External reporting connected to your business world"/><div className="search-field"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search headlines and publishers"/></div><div className="content-section">{items.map(item=><article className="detail-section" key={item.id}><div className="row-head"><b>{item.domain}</b><small>{item.published_at?shortDate(item.published_at):'Publication date unavailable'}</small></div><h3>{item.title}</h3><p className="subtle">{[item.source_country,item.language].filter(Boolean).join(' · ')||'External source'} · Retrieved {shortDate(item.retrieved_at)}</p><a href={item.url} target="_blank" rel="noopener noreferrer">Read original report <ArrowUpRight size={15}/></a></article>)}{!items.length&&<Empty title="No external reports yet" description="Sourced news appears after the world engine refreshes its real-world feed." icon={Newspaper}/>}</div><div className="info-note">News headlines are third-party reporting, not independently verified facts. Review the original source before making business decisions. Data provider: GDELT Project.</div></>;
+ async function refresh(){
+  if(refreshing)return;
+  setRefreshing(true);
+  try{
+   await api('/intelligence/refresh',{method:'POST',body:{}});
+   await new Promise(resolve=>setTimeout(resolve,7000));
+   await onRefresh?.();
+   notify?.('News and external indicators refreshed. Review the source and publication dates before relying on them.');
+  }catch(error){notify?.(error.message||'The intelligence refresh could not be started.');}
+  finally{setRefreshing(false);}
+ }
+ return <><AppHeader title="News" back={onBack} subtitle="External reporting connected to your business world" action={<button className="icon-circle" disabled={refreshing} onClick={refresh}><RefreshCw size={18}/></button>}/><div className="search-field"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search headlines and publishers"/></div><div className="content-section">{items.map(item=><article className="detail-section" key={item.id}><div className="row-head"><b>{item.domain}</b><small>{item.published_at?shortDate(item.published_at):'Publication date unavailable'}</small></div><h3>{item.title}</h3><p className="subtle">{[item.source_country,item.language].filter(Boolean).join(' · ')||'External source'} · Retrieved {shortDate(item.retrieved_at)}</p><a href={item.url} target="_blank" rel="noopener noreferrer">Read original report <ArrowUpRight size={15}/></a></article>)}{!items.length&&<Empty title="No external reports yet" description="Use the refresh control to retrieve current reports from GDELT, Google News, BBC and The Guardian." icon={Newspaper}/>}</div><div className="info-note">Headlines are third-party reporting, not independently verified facts. Review the original source before making business decisions. Available feeds include GDELT, Google News RSS, BBC and The Guardian.</div></>;
 }
 function Activity({state,user,onBack,targetEventId,onOpen}){
  const [query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[period,setPeriod]=useState('all');
