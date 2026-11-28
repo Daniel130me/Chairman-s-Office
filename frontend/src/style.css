@@ -177,3 +177,14 @@
 .meeting-compose button,.chat-compose button{min-height:40px}
 @media(max-width:420px){.form-card{margin-inline:14px;padding:18px 15px}.content-section{padding-inline:15px}.content-section>.form-card,.detail-section>.form-card,.meeting-chat .form-card{margin-inline:0}.form-card .detail-section{padding:12px}.access-card{padding:28px 20px}.onboard-inner{padding-inline:20px}}
 @media(max-width:360px){.form-card{margin-inline:10px;padding:15px 12px}.content-section{padding-inline:12px}.form-card .primary-btn{padding-inline:10px}.settings-row{gap:8px}}
+
+
+/* Calendar proposal messages use the same safe rich-text renderer as Messages. */
+.proposal-message{margin:.55rem 0 .7rem;min-width:0}
+.proposal-agenda{display:grid;gap:.35rem;margin:.7rem 0;padding:.75rem .85rem;border:1px solid rgba(125,140,160,.24);border-radius:12px;background:rgba(125,140,160,.08)}
+.proposal-agenda>.rich-text{font-size:.96em}
+.proposal-options{margin:.75rem 0;padding:.8rem .85rem;border:1px solid rgba(125,140,160,.28);border-radius:12px;background:rgba(125,140,160,.06)}
+.proposal-option-list{display:flex;flex-wrap:wrap;gap:.55rem;margin:.6rem 0}
+.proposal-time-choice{border:1px solid rgba(125,140,160,.4);border-radius:999px;padding:.58rem .85rem;background:rgba(125,140,160,.12);color:inherit;font:inherit;font-weight:700;cursor:pointer}
+.proposal-time-choice:disabled{opacity:.55;cursor:not-allowed}
+.proposal-options small,.proposal-selected-time{display:block;line-height:1.5;color:var(--muted,#778397);margin-top:.4rem}
