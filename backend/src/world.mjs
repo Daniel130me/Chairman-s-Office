@@ -157,7 +157,9 @@ export async function message(user,contactId,body,channel='chat',sourceCallId=nu
     await queueCharacterMemory({userId:user.id,worldId:w.id,contactId:c.id,sourceType:'direct-message',sourceId:outgoingId,context:{channel,chairmanMessage:body,characterReply:null,delivery:'saved-no-reply'}}).catch(error=>console.warn('Character memory queue unavailable',error.code||error.name));
     return {reply:null,delivery:'saved-no-reply'};
   }
-  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,subject) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[uid(),user.id,w.id,c.id,'incoming',channel,reply,channel==='email'?replyMailSubject(mailSubject):null]);
+  const incomingId=uid();
+  await sql('INSERT INTO messages(id,user_id,world_id,contact_id,direction,channel,body,subject) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[incomingId,user.id,w.id,c.id,'incoming',channel,reply,channel==='email'?replyMailSubject(mailSubject):null]);
+  await sql('INSERT INTO events(id,user_id,world_id,contact_id,kind,title,body) VALUES($1,$2,$3,$4,$5,$6,$7)',[uid(),user.id,w.id,c.id,channel==='email'?'executive-email-received':'executive-message-received',(channel==='email'?'Email from ':'Message from ')+c.name,reply.slice(0,500)]);
   await sql('UPDATE contacts SET last_contact_at=now() WHERE id=$1',[c.id]);
   await queueCharacterMemory({userId:user.id,worldId:w.id,contactId:c.id,sourceType:channel==='email'?'email':'direct-message',sourceId:outgoingId,context:{channel,subject:mailSubject,chairmanMessage:body,characterReply:reply}}).catch(error=>console.warn('Character memory queue unavailable',error.code||error.name));
   return {reply};
