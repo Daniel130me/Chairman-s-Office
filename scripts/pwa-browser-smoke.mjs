@@ -91,7 +91,7 @@ try{
  // Calendar exercises date inputs and chip buttons without submitting live data.
  await page.goto(base+'/?app=calendar',{waitUntil:'domcontentloaded'});
  await page.locator('.app-header button.icon-circle').last().click();
- const schedule=page.locator('form.form-card').filter({hasText:'Schedule a meeting'});
+ const schedule=page.locator('form.form-card').filter({hasText:'Schedule a boardroom meeting'});
  await schedule.getByLabel('Meeting title').waitFor();
  const attendee=schedule.getByRole('button',{name:'Test Executive'});
  await attendee.click();assert.equal(await attendee.getAttribute('aria-pressed'),'true');
