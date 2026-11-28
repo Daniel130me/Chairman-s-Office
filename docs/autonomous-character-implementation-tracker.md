@@ -1,10 +1,10 @@
 # Autonomous Character System — Implementation Tracker
 
-Scope: four phases. Phase 2 must not start until Phase 1 has passed its completion gates. Production changes require a reviewed release; this branch is isolated from main.
+Scope: four phases. Phase 2 was explicitly authorized while Phase 1 live-preview and live-model verification remained open. Both phases are included in the isolated Phase 2 branch. Production changes require a reviewed release; this branch is isolated from main.
 
 Status convention: [x] implementation committed; [ ] outstanding or verification not yet confirmed. A committed task does not imply a passed acceptance test.
 
-## Phase 1 — Character Psychology, Identity and Influence (in progress)
+## Phase 1 — Character Psychology, Identity and Influence (implementation and isolated CI verified; live verification open)
 
 ### Implementation
 - [x] Audit the current main branch and reuse contacts, goals, memories, relationships and real-world intelligence.
@@ -21,22 +21,36 @@ Status convention: [x] implementation committed; [ ] outstanding or verification
 - [x] Add unit tests and isolated PostgreSQL persistence, concurrency and tenant-isolation tests.
 
 ### Completion gates
-- [ ] Unit and regression suite passes.
-- [ ] Next.js production build passes.
-- [ ] Fresh migration and repeated migration pass on isolated PostgreSQL.
-- [ ] PostgreSQL persistence, concurrent initialization and tenant isolation test passes.
+- [x] Unit and regression suite passes.
+- [x] Next.js production build passes.
+- [x] Fresh migration and repeated migration pass on isolated PostgreSQL.
+- [x] PostgreSQL persistence, concurrent initialization and tenant isolation test passes.
 - [ ] Preview deployment is verified against a non-production database.
 - [ ] Scenario review verifies that differing constitutions can lead to coherent differences in responses, influence is context-sensitive, and no private knowledge is leaked.
 - [ ] Review and record any limitations; mark Phase 1 complete only when its gates pass.
 
 Phase 1 deliberately does not implement autonomous approval authority, new business action types, permanent evidence-based character evolution or rankings. Those belong to later phases.
 
-## Phase 2 — Independent Decisions, Authority and Action Execution
-- [ ] Structured decision records, event-triggered activation and explicit inaction.
-- [ ] Role-specific delegated authority, segregation of duties, reserved decisions and approval routing.
-- [ ] Independent refusal, disagreement, investigation, negotiation, delegation, escalation and initiation.
-- [ ] Validated action catalog, transactional execution, failure recovery and idempotency.
-- [ ] Test permitted, prohibited, deferred and approval-required actions; no fabricated completion.
+## Phase 2 — Independent Decisions, Authority and Action Execution (implementation and isolated CI verified)
+- [x] Structured decision records, event-triggered activation and explicit inaction.
+- [x] Role-specific delegated authority, segregation of duties, reserved decisions and approval routing.
+- [x] Independent refusal, disagreement, investigation, nonbinding negotiation, delegation, escalation and initiation.
+- [x] Validated action catalog, transactional execution, failure recovery and idempotency.
+- [x] Test permitted, prohibited, deferred and approval-required actions; no fabricated completion.
+- [x] Chairman Approvals interface for scoped grants, limits, independent reviewer and decision history.
+- [x] Route existing executive business-event discovery through the agency pipeline; reconcile reserved approval outcomes.
+
+### Phase 2 verification
+Runtime and test commit: `359beb0356d4bc9bf538a2356d982e93805b04a0`.
+- [x] [Unit and regression suite](https://github.com/Daniel130me/Chairman-s-Office/actions/runs/46175267770).
+- [x] [Next.js migration checks](https://github.com/Daniel130me/Chairman-s-Office/actions/runs/46175267727).
+- [x] [Isolated PostgreSQL and browser verification](https://github.com/Daniel130me/Chairman-s-Office/actions/runs/46175267797): repeatable migrations, corporate finance, advanced operations, executive experience, network introductions, character psychology, agency authority and execution, tenant isolation, invariant checks, backup/restore, production build and Chromium PWA smoke. The earlier Phase 1 calendar smoke selector was corrected, and the legacy executive recovery test now checks the shared decision parser and retry fencing.
+- [ ] Live Vercel preview against a confirmed non-production database: build-rate limit blocked deployment; no billing change or production release attempted.
+- [ ] Live-model behavioral scenario verification: CI uses deterministic injected model responses, not a live provider. Review realistic scenarios before release.
+
+Scope decisions: autonomous evidence-backed tasks, in-world communication, and reviewed contract proposals can originate without the Chairman. Negotiation is nonbinding; fictional spending requires an explicit instruction and a scoped grant or approval; hiring, firing and contract activation remain reserved. Supported actions use existing business handlers. Broader channel integration, long-running autonomy and release checks remain Phase 4; permanent learning and reputational consequences remain Phase 3. No real financial transactions or production database changes were performed.
+
+Review: [Phase 1–2 draft PR #7](https://github.com/Daniel130me/Chairman-s-Office/pull/7).
 
 ## Phase 3 — Consequences, Learning, Evolution and Reputation
 - [ ] Immediate, delayed and indirect consequences with causal links and evidence.
