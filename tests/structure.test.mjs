@@ -130,11 +130,11 @@ test('calendar proposals and colleague delegation are persistent across messages
  assert.match(colleague,/report_to_chairman/);
  assert.match(colleague,/deliverColleagueCallReport/);
  assert.match(vapi,/arrange_colleague_call/);
- assert.match(app,/calendar\\/proposals/);
+ assert.match(app,/calendar\/proposals/);
  assert.match(app,/page==='calendar-event'/);
  assert.match(schema,/CREATE TABLE IF NOT EXISTS calendar_events/);
  assert.match(schema,/CREATE TABLE IF NOT EXISTS meeting_proposals/);
- assert.match(feed,/state\\.calendarEvents/);
+ assert.match(feed,/state\.calendarEvents/);
  assert.match(history,/calendar_events/);
 });
 test('push and external decision intelligence are wired into production paths',()=>{
