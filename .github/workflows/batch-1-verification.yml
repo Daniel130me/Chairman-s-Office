@@ -56,6 +56,8 @@ jobs:
         run: RUN_NETWORK_INTRO_DB_TESTS=1 node --test tests/network-introductions-db.test.mjs
       - name: Character psychology database isolation and persistence
         run: RUN_CHARACTER_PSYCHOLOGY_DB_TESTS=1 node --test tests/character-psychology-db.test.mjs
+      - name: Character agency database authority and execution
+        run: RUN_CHARACTER_AGENCY_DB_TESTS=1 node --test tests/character-agency-db.test.mjs
       - name: Read-only invariant checks
         run: npm run db:reconcile
       - name: Verify backup and restore on isolated CI database
