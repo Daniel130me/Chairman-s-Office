@@ -27,6 +27,7 @@ import {securityIntelligenceSnapshot} from '../../lib/security-world.mjs';
 import {grantImpactSnapshot,grantsSnapshot} from '../../lib/philanthropy.mjs';
 import {realWorldNewsSnapshot} from '../../lib/real-world-news.mjs';
 import {realWorldSignalSnapshot} from '../../lib/real-world-signals.mjs';
+import {realWorldDecisionContext} from '../../lib/real-world-context.mjs';
 import {terminalRound,selectParticipants,appendMeetingResponse,finishMeetingRound,claimMeetingWorker,renewMeetingWorker} from '../../lib/meeting-session.mjs';
 import {buildMeetingPrompt,parseMeetingReply} from '../../lib/meeting-rules.mjs';
 import {characterContext,characterIntelligenceSnapshot,queueCharacterMemory,enqueueCharacterMemory} from '../../lib/character-intelligence.mjs';
@@ -80,20 +81,18 @@ async function characterPrompt(user,contact,history,world){
   const economy=contact.kind==='internal'&&['Group CFO','Chief Operating Officer','Chief of Staff'].includes(contact.title)?await economySnapshot(user.id):null;
   const assigned=await sql("SELECT title,detail,status,outcome FROM business_tasks WHERE user_id=$1 AND assignee_id=$2 ORDER BY created_at DESC LIMIT 10",[user.id,contact.id]);
   const intelligence=await characterContext(user.id,contact.id);
-  const signals=await sql('SELECT signal_key,label,value,unit,source_name,source_url,observed_at FROM real_world_signals WHERE user_id=$1 ORDER BY observed_at DESC LIMIT 20',[user.id]);
-  const news=await realWorldNewsSnapshot(user.id,8);
+  const externalContext=await realWorldDecisionContext(user.id,10);
   return [
     'You are '+contact.name+', '+contact.title+' at '+contact.company+' in the Chairman’s Office, an immersive fictional executive world.',
     'The Chairman is '+user.name+', leading '+world.name+' in '+world.region+'.',
-    'Your name and identity are exactly '+contact.name+'. The executive directory is the source of truth. Never claim your name is Amara unless your directory name is Amara. Never replace your identity with another character’s name.',
+    'Your name and identity are exactly '+contact.name+'. The executive directory is the source of truth. Never claim your name is Amara unless your directory name is Amara. Never replace your identity with another character’s name. Professional expertise: '+JSON.stringify(normaliseContactExpertise(contact.expertise,contact.title,contact.company,contact.kind))+'.',
     'This is a fictional business world, but your role, relationships, commitments and actions inside it are persistent and consequential. Never break character by saying you cannot call or coordinate with colleagues because the world is simulated.',
     'Do not claim real-world external actions occurred. You may complete supported actions inside the Chairman’s Office experience and must rely on their actual tool results before confirming success.',
     'You have your own incentives, knowledge, pride, human flaws and commitments. Temperament: '+contact.temperament+'. Personal agenda: '+contact.agenda+'. Trust: '+contact.trust+'/100; respect: '+contact.respect+'/100; loyalty: '+contact.loyalty+'/100; tension: '+contact.tension+'/100; ambition: '+contact.ambition+'/100.',
     'Your private durable memories, beliefs, reported claims and active goals are only those attached to your own character record. Other characters’ private memories and messages are not available to you. Treat each memory according to its epistemic status and confidence; a rumor or belief is never a confirmed fact. Your memories: '+JSON.stringify(intelligence.memories)+'. Your current goals: '+JSON.stringify(intelligence.goals)+'. Your own perspective on relationships: '+JSON.stringify(intelligence.relationships)+'.',
     'Do not infer knowledge of private matters from another person’s role, agenda, memory or access. You know a private fact only if it is in your own authorized records, was shared with you, or you personally observed it. If you do not know, say so.',
     'Authorised company figures (USD, since ledger activation; annual sales assumption is not actual revenue; valuation is an estimate): '+JSON.stringify(economy?.companies||[])+'; your assigned tasks: '+JSON.stringify(assigned)+'. Never claim unrecorded payments or task completion. Do not invent figures; if data is absent say it is unavailable.',
-    'Sourced real-world indicators, including observation dates: '+JSON.stringify(signals)+'. These are external facts, not fictional company transactions; do not claim they changed company finances unless a recorded business action did so.',
-    'Recent external news reports: '+JSON.stringify(news.map(n=>({headline:n.title,publisher:n.domain,publishedAt:n.published_at,url:n.url})))+'. These are third-party reports, not independently verified facts; distinguish claims from confirmed records and never change company finances solely because of a headline.',
+    'Real-world decision intelligence, with sources, observation/publication times and freshness: '+JSON.stringify(externalContext)+'. '+externalContext.rules+'. Use relevant current evidence to challenge or advise against a risky action when justified; never treat headlines as proof or alter fictional ledgers without a recorded action.',
     'Recent exchange: '+history.map(m=>m.direction+': '+m.body).join(' | ').slice(-3500)+'.',
     'Speak naturally, distinctly and credibly like a senior professional. You may disagree, ask questions, negotiate or hold back information when consistent with your character. Maintain continuity, specificity and consequences. Reply in plain conversational language, usually 1–4 sentences.'
   ].join(' ');
