@@ -6,6 +6,7 @@ test('an assistant callback is described as a call from me',()=>{
  const text=describeSchedule({contact,delaySeconds:0},{selfCallback:true});
  assert.match(text,/incoming call from me has been placed/i);
  assert.doesNotMatch(text,/Amara Okafor/);
+ assert.match(text,/Please end the current call/i);
 });
 test('a delegated call names the executive who will call',()=>{
  const text=describeSchedule({contact:{name:'David Okoro',title:'Group CFO'},delaySeconds:0});
