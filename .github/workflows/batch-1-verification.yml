@@ -60,6 +60,8 @@ jobs:
         run: RUN_CHARACTER_AGENCY_DB_TESTS=1 node --test tests/character-agency-db.test.mjs
       - name: Character development outcomes and attribution
         run: RUN_CHARACTER_DEVELOPMENT_DB_TESTS=1 node --test tests/character-development-db.test.mjs
+      - name: Living world coordination and 72-hour simulated clock
+        run: RUN_LIVING_AGENCY_DB_TESTS=1 node --test tests/living-agency-db.test.mjs
       - name: Read-only invariant checks
         run: npm run db:reconcile
       - name: Verify backup and restore on isolated CI database
