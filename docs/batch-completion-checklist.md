@@ -127,3 +127,7 @@ Implementation is not synonymous with live acceptance. Keep production isolated 
 
 - Vapi Web SDK 3.0.1 call lifecycle now handles `call-start-failed` and progress events, distinguishes non-fatal audio observer warnings, gives actionable microphone/configuration/network errors, and records truthful failure summaries when no conversation began. Added a bounded connection timeout.
 - External network introductions are explicitly incoming messages written by the new contact to the Chairman, use the account display name, reject Chairman-written drafts/signature placeholders, and reject real public-institution impersonation. Existing Dr. Elena Kovács record corrected to a fictional regulator counterpart.
+
+- Vapi now has a signed-call-token `send_chairman_message` tool. Clear spoken requests for a debrief/text are saved as incoming in-app chat messages from the current executive, with idempotency keys and an Activity event. The assistant must not claim delivery until the insert succeeds; the tool explicitly does not send external SMS.
+- Callback confirmations now say an incoming call is from `me` for the current executive's own callback, while delegated calls continue to name the selected executive.
+- Orpheus WAV streaming headers are normalized to standard RIFF/data chunk sizes before storage and for historical synthetic voicemail audio. Gender-mismatched saved voice preferences are overridden for known male/female names.
