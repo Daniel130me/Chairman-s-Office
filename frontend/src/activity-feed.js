@@ -102,6 +102,8 @@ export function buildActivityFeed(state = {}, user = {}) {
     'travel-disruption':'travel','travel-concierge-ready':'travel','travel-disruption-resolved':'travel','call-recovered':'phone',
     'inventory-stocktake':'inventory','inventory-customer-return':'inventory','inventory-supplier-return':'inventory','supplier-quality-review':'inventory','supplier-delivery-overdue':'inventory','contract-obligation-breached':'operations','contract-obligation-fulfilled':'operations','contract-obligation-waived':'operations','contract-obligation':'operations','commercial-dispute-opened':'operations','commercial-dispute-resolved':'operations',
     'colleague-message': 'messages',
+    'character-decision': 'approvals',
+    'character-consequence': 'employees',
     'missed-call-message': 'messages',
     'approval-requested': 'approvals',
     'investigation-opened': 'investigations',
@@ -179,6 +181,12 @@ export function buildActivityFeed(state = {}, user = {}) {
     });
   }
 
+  for(const decision of list(state.characterDecisions)){
+    add('character-decision-record',decision,{date:decision.completed_at||decision.created_at,kind:'character-decision',category:'approvals',title:'Independent decision · '+(decision.decision?.title||decision.character_name||contactName(decision.contact_id)||'Character'),body:[decision.decision?.choice,decision.decision?.reason,decision.authority?.reason].filter(Boolean).join(' · '),source:'Character decisions',actor:decision.character_name||contactName(decision.contact_id),status:decision.status,participation:decision.source_type==='chairman-message'?'you':'away',requiresAttention:['awaiting-approval','failed'].includes(decision.status),target:'approvals'});
+  }
+  for(const result of list(state.characterConsequences)){
+    add('character-consequence-record',result,{date:result.occurred_at,kind:'character-consequence',category:'people',title:'Recorded outcome · '+(result.outcome||'Consequence').replaceAll('-',' '),body:[result.reason,result.attribution].filter(Boolean).join(' · '),source:'Causal outcome history',actor:result.character_name||contactName(result.contact_id),status:result.stage,participation:result.source_type==='chairman-assessment'?'you':'away',target:'employees'});
+  }
   const audit = state.operations?.auditLog || [];
   for (const entry of list(audit)) {
     const actor = entry.actor_name || entry.actor || entry.actor_type || 'Office';
