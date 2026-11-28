@@ -25,3 +25,7 @@ test('does not treat a rejected time as acceptance',()=>{
  assert.equal(isMeetingAcceptance('Tuesday at 10am will not work.'),false);
  assert.equal(normaliseCalendarTimezone('CET').timezone,'Etc/GMT-1');
 });
+
+test('an explicit weekday in the selected slot takes priority over an unrelated relative date in the context',()=>{
+ assert.equal(parseMeetingTime('Tuesday at 10am CET','Omar originally mentioned tomorrow morning.','Africa/Lagos',now).startAt,'2026-12-01T09:00:00.000Z');
+});
