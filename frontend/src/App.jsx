@@ -187,6 +187,7 @@ async function startVapi(data,c){
       'BOUNDARIES: Do not claim to make real-world PSTN calls or perform external actions. You can arrange incoming calls between characters inside the Chairman’s Office app. Confirm an action only after the relevant tool returns success.',
       'COLLEAGUES: '+(colleagues||'Use the Chairman’s executive directory to identify colleagues by name or job title.'),
       'DELEGATION: When the Chairman asks you to have an executive call him, ask an executive to call him, or arrange a callback, use arrange_internal_call. Do not merely promise to do it and do not refuse because the world is fictional.',
+      'COLLEAGUE-TO-COLLEAGUE CALLS: When the Chairman asks you to call, speak to, contact or brief another named person in the executive directory, use arrange_colleague_call. You are the caller; the named person is the recipient. Pass the actual purpose and set report_back=true if the Chairman wants you to call him afterwards, brief him or tell him what the person says. Never claim the colleague call has happened until the tool returns success. The call, transcript, follow-up and any requested callback are persisted in Messages and the Activity timeline.',
       'MANDATORY MESSAGE DELIVERY: If the Chairman asks you to send, text, or save a debrief, recap, summary, call notes or reminder in Messages, you MUST call send_chairman_message before presenting or reading out the debrief. Compose the complete message from verified facts, call the tool, and wait for its result. Only after a successful result may you confirm it was sent. Do not substitute a spoken summary for delivery. If the tool fails, say clearly that it was not sent. This sends an in-app message, not an external SMS.',
       'COMMITMENT BOUNDARY: Do not promise to prepare documents, contact third parties or complete work unless a supported tool succeeds. For supported consequential business actions, use propose_business_action and explain that Chairman approval is required. If an action is not supported, say so honestly and offer the nearest supported next step.',
       'BUSINESS ACTIONS: If the Chairman asks for a consequential company action such as an expense, hiring, firing, activating a contract or delegating work, collect any missing details and use propose_business_action. This submits an approval request; it does not execute the action. Never say the action is complete until the Chairman approves it and the application confirms execution. Tell the Chairman to review the Approvals app.',
@@ -229,6 +230,25 @@ async function startVapi(data,c){
         {type:'request-failed',content:'I could not save that message, so it has not been delivered.',blocking:false}
       ]
     };
+    const colleagueCallTool={
+      type:'function',async:false,
+      function:{
+        name:'arrange_colleague_call',
+        description:'Queue a persistent in-app call from you to another named executive or stakeholder in the Chairman’s Office directory. Use this when the Chairman asks you to call or speak with another person. If he asks you to report back or call him afterwards, set report_back=true.',
+        parameters:{type:'object',properties:{
+          recipient:{type:'string',minLength:1,maxLength:200,description:'Exact contact name or unique role from the executive directory.'},
+          reason:{type:'string',minLength:3,maxLength:500,description:'What you must discuss, explain, confirm or negotiate with the recipient.'},
+          report_back:{type:'boolean',description:'Set true if the Chairman wants a written report and an incoming callback from you after the colleague call.'}
+        },required:['recipient','reason','report_back'],additionalProperties:false}
+      },
+      server:{url:window.location.origin+'/api/vapi/tools'},
+      parameters:[{key:'action_token',value:'{{ actionToken }}'}],
+      messages:[
+        {type:'request-start',content:'I am arranging that call with your colleague now.',blocking:false},
+        {type:'request-complete',content:'The colleague call has been queued and recorded in Messages.',blocking:false},
+        {type:'request-failed',content:'I could not arrange that colleague call, so it has not been placed.',blocking:false}
+      ]
+    };
     const overrides={
       firstMessage:'Good day, Chairman. '+c.name+' speaking.',
       variableValues:{
@@ -236,7 +256,7 @@ async function startVapi(data,c){
         chairman_name:user?.name||'Chairman',executive_context:data.context,
         available_colleagues:colleagues,actionToken:data.actionToken||''
       },
-      ...(data.actionToken?{'tools:append':[callTool,sendMessageTool,{
+      ...(data.actionToken?{'tools:append':[callTool,sendMessageTool,colleagueCallTool,{
         type:'function',async:false,function:{
           name:'propose_business_action',
           description:'Submit a consequential action in the Chairman’s fictional business empire for Chairman approval. Never execute it yourself. Supported action types are expense, hire, fire, activate-contract and assign-task.',
