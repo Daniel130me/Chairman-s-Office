@@ -83,8 +83,8 @@ export async function state(userId){const world=await one('SELECT * FROM worlds 
 async function characterPrompt(user,contact,history,world){
   const economy=contact.kind==='internal'&&['Group CFO','Chief Operating Officer','Chief of Staff'].includes(contact.title)?await economySnapshot(user.id):null;
   const assigned=await sql("SELECT title,detail,status,outcome FROM business_tasks WHERE user_id=$1 AND assignee_id=$2 ORDER BY created_at DESC LIMIT 10",[user.id,contact.id]);
-  const intelligence=await characterContext(user.id,contact.id);
   const externalContext=await realWorldDecisionContext(user.id,10);
+  const intelligence=await characterContext(user.id,contact.id,externalContext);
   return [
     'You are '+contact.name+', '+contact.title+' at '+contact.company+' in the Chairman’s Office, an immersive fictional executive world.',
     'The Chairman is '+user.name+', leading '+world.name+' in '+world.region+'.',
@@ -111,7 +111,7 @@ async function classifyBusinessAction(user,contact,body,operationKeyValue){
   sql("SELECT id,name,title,company FROM contacts WHERE user_id=$1 AND kind='internal'",[user.id])
  ]);
  const externalContext=await realWorldDecisionContext(user.id,12);
- const intelligence=await characterContext(user.id,contact.id);
+ const intelligence=await characterContext(user.id,contact.id,externalContext);
  const parsed=await ask(
   'You are a strict business-action intent parser for a fictional company simulation. Consider current sourced news, weather, currency and macro indicators when they materially affect the requested action. If credible external evidence creates material risk, do not silently proceed: return actionType none and explain the risk, source and date in one concise clarification. Distinguish reports from verified facts. Return JSON only: {"actionType":"expense|hire|fire|activate-contract|assign-task|none","title":"","reason":"","payload":{},"clarification":""}. Create an action only when the Chairman clearly instructs the executive to initiate a real action now, not when discussing a hypothetical, asking a question or exploring options. Never invent identifiers, salary, amount, names, companies or terms. Use only supplied IDs. If required details are missing, set actionType to none and ask one concise clarification. Never execute anything; the result is only a request for Chairman approval. '+INFLUENCE_RULES+' Apply the executive’s individual perspective; if they identify a material professional or ethical objection, return none and explain rather than automatically accepting.',
   JSON.stringify({chairmanMessage:body,requestingExecutive:{name:contact.name,title:contact.title,psychology:intelligence.psychology},companies,activeEmployees:employees,draftContracts:contracts,internalExecutives:executives,realWorldContext:externalContext,allowedPayloads:{
